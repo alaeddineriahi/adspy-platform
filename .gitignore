@@ -47,3 +47,10 @@ coverage/
 # Misc
 *.zip
 .vercel
+
+# Cached Facebook session (contains live auth cookies — never commit)
+.fb_session.json
+backend/.fb_session.json
+# Captured Ad Library GraphQL request template (contains session tokens)
+.adlib_query.json
+backend/.adlib_query.json

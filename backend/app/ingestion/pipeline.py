@@ -72,10 +72,20 @@ def _ad_format(ad: RawAd) -> str:
     return "image"
 
 
+def creative_key(page_id: str, text: str) -> str:
+    """Stable identity for one creative — advertiser + normalized opening copy.
+
+    Near-duplicate collated entries of the same ad share a key, so search can
+    collapse them into a single card (with the variant_count badge) instead of
+    showing the same creative 3×.
+    """
+    norm = re.sub(r"[^0-9a-zA-Z؀-ۿ]+", "", (text or "").lower())[:60]
+    return f"{page_id}:{norm}"
+
+
 def _norm_key(ad: RawAd) -> str:
     """Identity used to count how many variants of one creative an advertiser runs."""
-    text = re.sub(r"[^0-9a-zA-Z؀-ۿ]+", "", ad.primary_text.lower())[:60]
-    return f"{ad.page_id}:{text}"
+    return creative_key(ad.page_id, ad.primary_text)
 
 
 def _assign_variant_counts(ads: list[RawAd]) -> None:
@@ -121,6 +131,7 @@ def _to_doc(ad: RawAd, score) -> dict:
         "is_ecommerce": score.is_ecommerce,
         "strong_commerce": score.strong_commerce,
         "ecom_signals": score.ecom_signals,
+        "creative_key": creative_key(ad.page_id, text),
         "source": "ad_library_scrape",
     }
 
@@ -194,7 +205,8 @@ async def ingest_best_performing(
         src = ad.images[0] if ad.images else None
         if src and r2_enabled():
             async with sem:
-                r2_url = await mirror_to_r2(src, f"ads/{ad.ad_id}.jpg")
+                # key prefix "media/" (NOT "ads/") — ad blockers block /ads/ image URLs too
+                r2_url = await mirror_to_r2(src, f"media/{ad.ad_id}.jpg")
             if r2_url:
                 doc["media_urls"] = [r2_url] + [u for u in doc["media_urls"] if u != src]
                 doc["thumbnail"] = r2_url

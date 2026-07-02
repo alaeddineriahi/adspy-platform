@@ -1,10 +1,12 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { Search, Bookmark, Zap, Eye, Settings, Download } from "lucide-react";
+import { Search, Bookmark, Zap, Eye, Settings, Download, Megaphone } from "lucide-react";
+import { SavedProvider } from "@/components/SavedProvider";
 
 const navItems = [
   { href: "/search", label: "Search", icon: Search },
   { href: "/brands", label: "Brand Spy", icon: Eye },
+  { href: "/mediabuyer", label: "Media Buyer", icon: Megaphone },
   { href: "/ai", label: "AI Tools", icon: Zap },
   { href: "/ingestion", label: "Ingestion", icon: Download },
   { href: "/saved", label: "Saved", icon: Bookmark },
@@ -36,7 +38,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <UserButton afterSignOutUrl="/" />
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        <SavedProvider>{children}</SavedProvider>
+      </main>
     </div>
   );
 }

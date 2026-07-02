@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.routes import ads, brands, ai, users, payments, ingestion
+from app.api.routes import ads, brands, ai, users, payments, ingestion, mediabuyer
 
 logger = logging.getLogger("adspy")
 logging.basicConfig(level=logging.INFO)
@@ -71,10 +71,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(ads.router, prefix="/api/ads", tags=["ads"])
+# NOTE: mounted at /api/creatives (NOT /api/ads) on purpose — browser ad blockers
+# (uBlock/AdBlock/Brave) block any request path containing "ads", which would
+# ERR_BLOCKED_BY_CLIENT every call in this ad-intelligence app.
+app.include_router(ads.router, prefix="/api/creatives", tags=["creatives"])
 app.include_router(ingestion.router, prefix="/api/ingestion", tags=["ingestion"])
 app.include_router(brands.router, prefix="/api/brands", tags=["brands"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
+app.include_router(mediabuyer.router, prefix="/api/mediabuyer", tags=["mediabuyer"])
 app.include_router(users.router, prefix="/api/user", tags=["users"])
 app.include_router(payments.router, prefix="/api", tags=["payments"])
 

@@ -37,7 +37,7 @@ export default function SearchPage() {
     params.set("limit", "20");
 
     try {
-      const res = await fetch(`${API_URL}/api/ads/search?${params}`);
+      const res = await fetch(`${API_URL}/api/creatives/search?${params}`);
       const data = await res.json();
       setResults(data.results || []);
       setTotal(data.total || 0);

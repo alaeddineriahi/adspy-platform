@@ -10,7 +10,7 @@ and return the same JSON structure.
 
 import json
 import httpx
-from typing import Optional
+from typing import AsyncIterator, Optional
 from app.core.config import settings
 
 
@@ -71,6 +71,100 @@ async def _call_claude(system_prompt: str, user_prompt: str) -> str:
         )
         resp.raise_for_status()
         return resp.json()["content"][0]["text"]
+
+
+# ─── Streaming (for the conversational media-buyer co-pilot) ────────
+
+async def stream_llm(
+    system_prompt: str,
+    messages: list[dict],
+    temperature: float = 0.6,
+    max_tokens: int = 1600,
+) -> AsyncIterator[str]:
+    """Stream a chat completion token-by-token, routed to Groq or Claude.
+
+    `messages` is a list of {"role": "user"|"assistant", "content": str},
+    oldest first. Yields text deltas as they arrive.
+    """
+    provider = getattr(settings, "AI_PROVIDER", "groq")
+    if provider == "anthropic":
+        async for delta in _stream_claude(system_prompt, messages, temperature, max_tokens):
+            yield delta
+    else:
+        async for delta in _stream_groq(system_prompt, messages, temperature, max_tokens):
+            yield delta
+
+
+async def _stream_groq(system_prompt, messages, temperature, max_tokens) -> AsyncIterator[str]:
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "system", "content": system_prompt}, *messages],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+    async with httpx.AsyncClient(timeout=90) as client:
+        async with client.stream(
+            "POST",
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        ) as resp:
+            if resp.status_code >= 400:
+                body = (await resp.aread()).decode("utf-8", "ignore")
+                raise RuntimeError(f"Groq {resp.status_code}: {body[:300]}")
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    delta = json.loads(data)["choices"][0]["delta"].get("content")
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+                if delta:
+                    yield delta
+
+
+async def _stream_claude(system_prompt, messages, temperature, max_tokens) -> AsyncIterator[str]:
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "system": system_prompt,
+        "messages": messages,
+        "stream": True,
+    }
+    async with httpx.AsyncClient(timeout=90) as client:
+        async with client.stream(
+            "POST",
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": settings.ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        ) as resp:
+            if resp.status_code >= 400:
+                body = (await resp.aread()).decode("utf-8", "ignore")
+                raise RuntimeError(f"Claude {resp.status_code}: {body[:300]}")
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                try:
+                    event = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") == "content_block_delta":
+                    text = event.get("delta", {}).get("text")
+                    if text:
+                        yield text
 
 
 # ─── System prompts ────────────────────────────────────────────────

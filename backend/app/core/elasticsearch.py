@@ -69,6 +69,7 @@ ADS_INDEX_MAPPING = {
             "ad_format": {"type": "keyword"},
             "advertiser_id": {"type": "keyword"},
             "ad_id": {"type": "keyword"},
+            "creative_key": {"type": "keyword"},
             "is_active": {"type": "boolean"},
             # Date fields
             "first_seen": {"type": "date"},
@@ -191,12 +192,18 @@ async def search_ads(
         "from": offset,
         "size": limit,
         "_source": True,
+        # Collapse near-duplicate creatives (same advertiser + copy) into one card
+        # so the same ad doesn't appear 3×. The kept hit carries variant_count.
+        "collapse": {"field": "creative_key"},
+        # Distinct-creative count so pagination reflects cards shown, not raw docs.
+        "aggs": {"groups": {"cardinality": {"field": "creative_key"}}},
     }
 
     result = await es.search(index="ads", body=body)
 
     hits = result["hits"]["hits"]
-    total = result["hits"]["total"]["value"]
+    doc_total = result["hits"]["total"]["value"]
+    total = int(result.get("aggregations", {}).get("groups", {}).get("value", doc_total))
 
     return {
         "results": [

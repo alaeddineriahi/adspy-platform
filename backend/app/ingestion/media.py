@@ -74,7 +74,13 @@ async def mirror_to_r2(url: str, key: str) -> Optional[str]:
         if resp.status_code != 200 or not resp.content:
             logger.info("media fetch %s -> HTTP %s", key, resp.status_code)
             return None
-        ctype = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+        ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+        # Never store a video/audio as a thumbnail — it renders as a broken <img>.
+        if ctype.startswith(("video/", "audio/")):
+            logger.info("skip non-image media %s (%s)", key, ctype)
+            return None
+        if not ctype.startswith("image/"):
+            ctype = "image/jpeg"  # unknown content-type → assume image
         await asyncio.to_thread(_put, key, resp.content, ctype)
         public = (getattr(settings, "R2_PUBLIC_URL", "") or "").rstrip("/")
         return f"{public}/{key}"

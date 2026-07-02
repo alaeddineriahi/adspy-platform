@@ -1,9 +1,10 @@
 "use client";
 
 import { Ad } from "@/types";
-import { Bookmark, ExternalLink, Clock, Globe, ImageOff, Layers, TrendingUp } from "lucide-react";
+import { Bookmark, ExternalLink, Clock, Globe, ImageOff, Layers, TrendingUp, Megaphone } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { useSaved } from "@/components/SavedProvider";
 
 export function AdCard({ ad }: { ad: Ad }) {
   const platformColors: Record<string, string> = {
@@ -14,6 +15,10 @@ export function AdCard({ ad }: { ad: Ad }) {
 
   const thumb = ad.thumbnail || ad.media_urls?.[0];
   const [imgOk, setImgOk] = useState(true);
+
+  const savedId = ad.id || ad.ad_id;
+  const { isSaved, toggle } = useSaved();
+  const saved = isSaved(savedId);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition group">
@@ -37,8 +42,20 @@ export function AdCard({ ad }: { ad: Ad }) {
         >
           {ad.platform === "meta" ? "Meta" : ad.platform === "tiktok" ? "TikTok" : ad.platform}
         </span>
-        <button className="absolute top-3 right-3 p-2 bg-white/90 rounded-lg opacity-0 group-hover:opacity-100 transition hover:bg-white">
-          <Bookmark className="w-4 h-4 text-gray-600" />
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggle(savedId);
+          }}
+          title={saved ? "Remove from saved" : "Save to swipe file"}
+          className={`absolute top-3 right-3 p-2 rounded-lg transition ${
+            saved
+              ? "bg-gray-900 text-white opacity-100"
+              : "bg-white/90 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white"
+          }`}
+        >
+          <Bookmark className={`w-4 h-4 ${saved ? "fill-current" : ""}`} />
         </button>
         {typeof ad.performance_score === "number" && (
           <span
@@ -87,6 +104,13 @@ export function AdCard({ ad }: { ad: Ad }) {
           className="flex-1 text-center py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800"
         >
           View details
+        </Link>
+        <Link
+          href={`/mediabuyer?ad=${ad.id || ad.ad_id}`}
+          title="Plan a campaign with the media buyer"
+          className="flex items-center justify-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+        >
+          <Megaphone className="w-4 h-4 text-gray-600" />
         </Link>
         {ad.landing_page && (
           <a

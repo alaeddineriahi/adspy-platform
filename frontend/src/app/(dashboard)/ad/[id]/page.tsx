@@ -20,7 +20,7 @@ export default function AdDetailPage() {
   const [script, setScript] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/ads/${id}`)
+    fetch(`${API_URL}/api/creatives/${id}`)
       .then((r) => r.json())
       .then(setAd)
       .catch(console.error)

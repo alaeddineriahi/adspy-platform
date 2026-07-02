@@ -32,7 +32,7 @@ async def search_brands(
         await es.close()
 
 
-@router.get("/{brand_id}/ads")
+@router.get("/{brand_id}/creatives")
 async def get_brand_ads(
     brand_id: str,
     page: int = Query(1, ge=1),

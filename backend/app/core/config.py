@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # --- Meta Ad Library (official Graph API) ---
     META_ACCESS_TOKEN: str = ""
     META_API_VERSION: str = "v21.0"
+    # Ad account for the (future) live media-buyer execution seam, e.g. act_1234567890.
+    # When this + META_ACCESS_TOKEN are set, /api/mediabuyer/capabilities reports
+    # meta_execution=true and the executor can create real campaigns.
+    META_AD_ACCOUNT_ID: str = ""
 
     # --- Scraping (legacy / unused) ---
     BRIGHTDATA_API_KEY: str = ""

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Download, Loader2, Play, CheckCircle2, XCircle, RefreshCw, AlertTriangle, Activity } from "lucide-react";
-import { authFetch, apiError } from "@/lib/api";
+import { authFetch, apiError, errMessage } from "@/lib/api";
 import { adminApi } from "@/lib/admin";
 
 interface SessionInfo {
@@ -84,8 +84,8 @@ export default function AdminIngestionPage() {
       const r = await authFetch(getToken, "/api/ingestion/config");
       if (!r.ok) throw new Error(await apiError(r));
       setConfig(await r.json());
-    } catch (e: any) {
-      setError(e.message || "Cannot reach the API. Is the backend running on :8000?");
+    } catch (e) {
+      setError(errMessage(e, "Cannot reach the API. Is the backend running on :8000?"));
     }
   }, [getToken]);
 

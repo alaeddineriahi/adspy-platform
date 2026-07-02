@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Megaphone, Send, Loader2, Sparkles, RotateCcw, SlidersHorizontal, Check } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { authFetch, apiError, API_URL } from "@/lib/api";
+import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 
 const PROFILE_KEY = "adspy_buyer_profile";
@@ -236,12 +236,12 @@ export default function MediaBuyerPage() {
           });
         }
         refreshUsage(); // sidebar meter reflects the credit just spent
-      } catch (err: any) {
+      } catch (err) {
         setMessages((prev) => {
           const next = [...prev];
           next[next.length - 1] = {
             role: "assistant",
-            content: `⚠️ ${err.message || "Something went wrong. Is the backend running?"}`,
+            content: `⚠️ ${errMessage(err, "Something went wrong. Is the backend running?")}`,
           };
           return next;
         });
@@ -474,7 +474,7 @@ export default function MediaBuyerPage() {
         {outOfCredits && (
           <div className="max-w-3xl mx-auto mb-3 flex items-center justify-between gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
             <p className="text-sm text-blue-900">
-              You're out of AI credits this month — upgrade to keep the conversation going.
+              You&apos;re out of AI credits this month — upgrade to keep the conversation going.
             </p>
             <Link
               href="/pricing"

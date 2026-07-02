@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { Loader2, Search, ShieldAlert } from "lucide-react";
 import { adminApi, AdminUser } from "@/lib/admin";
+import { errMessage } from "@/lib/api";
 
 const PLAN_COLOR: Record<string, string> = {
   free: "bg-gray-100 text-gray-600",
@@ -28,8 +29,8 @@ export default function AdminUsersPage() {
         const data = await adminApi.users(getToken, query);
         setUsers(data.results);
         setTotal(data.total);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError(errMessage(e));
       } finally {
         setLoading(false);
       }

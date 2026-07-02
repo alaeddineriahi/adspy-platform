@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Check, Loader2, CreditCard, Sparkles } from "lucide-react";
-import { authFetch, apiError, API_URL } from "@/lib/api";
+import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 
 interface Plan {
@@ -64,8 +64,8 @@ export default function PricingPage() {
       if (!res.ok) throw new Error(await apiError(res));
       const data = await res.json();
       window.location.href = data.pay_url; // off to Konnect checkout
-    } catch (err: any) {
-      setError(err.message || "Couldn't start checkout");
+    } catch (err) {
+      setError(errMessage(err, "Couldn't start checkout"));
       setPaying(null);
     }
   };
@@ -84,7 +84,7 @@ export default function PricingPage() {
         </p>
         {usage && (
           <p className="text-xs text-gray-400 mt-2">
-            You're on <span className="font-semibold text-gray-600 capitalize">{currentPlan}</span>{" "}
+            You&apos;re on <span className="font-semibold text-gray-600 capitalize">{currentPlan}</span>{" "}
             · {usage.credits_remaining} of {usage.credits_limit} AI credits left this month
           </p>
         )}

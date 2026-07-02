@@ -8,14 +8,14 @@ id. Every mutation writes an AuditLog row.
 
 import asyncio
 import logging
-import socket
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import OperationalError
 
 from app.core import clerk_admin
@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.credits import (
     PLAN_CREDITS,
     admin_override_subscription,
+    effective_plan,
     reset_usage,
 )
 from app.core.database import async_session, engine
@@ -56,36 +57,28 @@ async def admin_me(uid: str = Depends(require_admin)):
 async def overview(uid: str = Depends(require_admin)):
     period = datetime.now(timezone.utc).strftime("%Y-%m")
     async with async_session() as db:
-        plan_counts = dict(
-            (row[0], row[1]) for row in (
-                await db.execute(
-                    select(Subscription.plan, func.count(Subscription.id))
-                    .where(Subscription.status == "active")
-                    .group_by(Subscription.plan)
-                )
-            ).all()
-        )
-        paid_subs = await db.scalar(
-            select(func.count(Subscription.id)).where(
-                Subscription.status == "active", Subscription.plan != "free"
-            )
-        ) or 0
-        comp_subs = await db.scalar(
-            select(func.count(Subscription.id)).where(
-                Subscription.status == "active", Subscription.is_comp == True  # noqa: E712
-            )
-        ) or 0
+        # Resolve every sub through effective_plan so expired/cancelled rows
+        # don't inflate MRR, and comps count as users but not as revenue.
+        subs = (await db.execute(select(Subscription))).scalars().all()
+        plan_counts: dict[str, int] = {}
+        paid_subs = comp_subs = 0
+        mrr_tnd = 0.0
+        for s in subs:
+            plan, _ = effective_plan(s)
+            plan_counts[plan] = plan_counts.get(plan, 0) + 1
+            if plan != "free":
+                if s.is_comp:
+                    comp_subs += 1
+                else:
+                    paid_subs += 1
+                    mrr_tnd += PLAN_PRICES.get(plan, 0) / 1000
+
         credits_used_month = await db.scalar(
             select(func.sum(CreditUsage.used)).where(CreditUsage.period == period)
         ) or 0
         pending_payments = await db.scalar(
             select(func.count(PaymentIntent.id)).where(PaymentIntent.status == "pending")
         ) or 0
-
-    mrr_tnd = sum(
-        (PLAN_PRICES.get(plan, 0) / 1000) * count
-        for plan, count in plan_counts.items() if plan in PLAN_PRICES
-    )
 
     es = get_es_client()
     try:
@@ -173,9 +166,8 @@ async def list_users(
 
     results = []
     for u in roster:
-        sub = subs.get(u["id"])
-        plan = sub.plan if sub and sub.status == "active" else "free"
-        limit_c = PLAN_CREDITS.get(plan, PLAN_CREDITS["free"]) + (sub.credit_bonus if sub else 0)
+        plan, bonus = effective_plan(subs.get(u["id"]))
+        limit_c = PLAN_CREDITS[plan] + bonus
         results.append({
             **u,
             "plan": plan,
@@ -222,15 +214,15 @@ async def user_detail(user_id: str, uid: str = Depends(require_admin)):
             )
         ).scalars().all()
 
-    plan = sub.plan if sub and sub.status == "active" else "free"
-    limit_c = PLAN_CREDITS.get(plan, PLAN_CREDITS["free"]) + (sub.credit_bonus if sub else 0)
+    plan, bonus = effective_plan(sub)
+    limit_c = PLAN_CREDITS[plan] + bonus
     return {
         "user": clerk_user,
         "subscription": {
             "plan": plan,
             "status": sub.status if sub else "active",
             "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
-            "credit_bonus": sub.credit_bonus if sub else 0,
+            "credit_bonus": bonus,
             "is_comp": sub.is_comp if sub else False,
         },
         "usage": {"credits_used": used, "credits_limit": limit_c},
@@ -282,7 +274,6 @@ class BanRequest(BaseModel):
 async def ban_user(user_id: str, req: BanRequest, uid: str = Depends(require_admin)):
     if user_id == uid and req.banned:
         raise HTTPException(400, "You can't ban yourself.")
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
     async with async_session() as db:
         await db.execute(
             pg_insert(UserFlag)
@@ -293,6 +284,8 @@ async def ban_user(user_id: str, req: BanRequest, uid: str = Depends(require_adm
             )
         )
         await db.commit()
+    from app.core.account_flags import invalidate
+    invalidate(user_id)  # take effect immediately, not after the auth cache TTL
     await _log(uid, "ban" if req.banned else "unban", user_id, req.reason)
     return {"status": "ok"}
 

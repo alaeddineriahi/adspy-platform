@@ -26,9 +26,13 @@ def _period_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
-async def _active_subscription(db, user_id: str) -> tuple[str, int]:
-    """Returns (plan, bonus_credits) for an active, unexpired subscription; else ("free", 0)."""
-    sub = await db.scalar(select(Subscription).where(Subscription.user_id == user_id))
+def effective_plan(sub) -> tuple[str, int]:
+    """(plan, bonus) a Subscription row actually grants right now.
+
+    Single source of truth for "is this sub live" — the admin backoffice must
+    show the same plan the metering enforces, so expiry/status checks live
+    here and nowhere else. Expired/cancelled/unknown → ("free", 0).
+    """
     if (
         sub
         and sub.status == "active"
@@ -38,6 +42,11 @@ async def _active_subscription(db, user_id: str) -> tuple[str, int]:
     ):
         return sub.plan, sub.credit_bonus or 0
     return "free", 0
+
+
+async def _active_subscription(db, user_id: str) -> tuple[str, int]:
+    sub = await db.scalar(select(Subscription).where(Subscription.user_id == user_id))
+    return effective_plan(sub)
 
 
 async def get_usage(user_id: str) -> dict:

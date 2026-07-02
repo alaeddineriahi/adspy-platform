@@ -25,6 +25,13 @@ export async function authFetch(
   return fetch(`${API_URL}${path}`, { ...init, headers });
 }
 
+/** Safe message from an unknown caught error (satisfies no-explicit-any). */
+export function errMessage(e: unknown, fallback = "Something went wrong"): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof e === "string" && e) return e;
+  return fallback;
+}
+
 /** Human-readable message for non-OK API responses (handles 401/402/429). */
 export async function apiError(res: Response): Promise<string> {
   try {

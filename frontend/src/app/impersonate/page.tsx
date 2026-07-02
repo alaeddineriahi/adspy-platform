@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSignIn } from "@clerk/nextjs";
 import { Loader2, ShieldAlert } from "lucide-react";
@@ -16,7 +16,7 @@ import { Loader2, ShieldAlert } from "lucide-react";
  * never in the admin's own tab — otherwise it signs the admin out of their
  * own session and into the target user's.
  */
-export default function ImpersonateRedeemPage() {
+function Redeemer() {
   const params = useSearchParams();
   const router = useRouter();
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -37,7 +37,11 @@ export default function ImpersonateRedeemPage() {
         }
         setError("Ticket could not be completed — it may have expired (5 min lifetime).");
       })
-      .catch((e: any) => setError(e?.errors?.[0]?.message || e?.message || "Redeem failed"));
+      .catch((e: unknown) => {
+        const clerkMsg = (e as { errors?: { message?: string }[] })?.errors?.[0]?.message;
+        const plainMsg = e instanceof Error ? e.message : "";
+        setError(clerkMsg || plainMsg || "Redeem failed");
+      });
   }, [isLoaded, params, signIn, setActive, router]);
 
   return (
@@ -54,5 +58,15 @@ export default function ImpersonateRedeemPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function ImpersonateRedeemPage() {
+  // useSearchParams() must sit under a Suspense boundary or `next build`
+  // fails the static prerender of this page.
+  return (
+    <Suspense fallback={null}>
+      <Redeemer />
+    </Suspense>
   );
 }

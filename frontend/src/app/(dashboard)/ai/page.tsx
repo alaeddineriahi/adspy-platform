@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Zap, Loader2, Film, Copy, CheckCheck } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { authFetch, apiError } from "@/lib/api";
+import { authFetch, apiError, errMessage } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 
 interface Hook {
@@ -59,8 +59,8 @@ export default function AIToolsPage() {
       if (!res.ok) throw new Error(await apiError(res));
       setScript(await res.json());
       refreshUsage(); // keep the sidebar credit meter honest
-    } catch (err: any) {
-      setError(err.message || "Generation failed");
+    } catch (err) {
+      setError(errMessage(err, "Generation failed"));
     } finally {
       setLoading(false);
     }

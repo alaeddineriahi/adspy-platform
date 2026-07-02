@@ -8,9 +8,22 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { authFetch, apiError, API_URL } from "@/lib/api";
+import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 import { Ad } from "@/types";
+
+interface ScriptHook {
+  type: string;
+  text: string;
+}
+interface ScriptResult {
+  error?: string;
+  out_of_credits?: boolean;
+  parse_error?: boolean;
+  analysis?: string;
+  hooks?: ScriptHook[];
+  script?: { full_script?: string } & Record<string, unknown>;
+}
 
 export default function AdDetailPage() {
   const { id } = useParams();
@@ -20,7 +33,7 @@ export default function AdDetailPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [script, setScript] = useState<any>(null);
+  const [script, setScript] = useState<ScriptResult | null>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/api/creatives/${id}`)
@@ -52,8 +65,8 @@ export default function AdDetailPage() {
       }
       setScript(await res.json());
       refreshUsage();
-    } catch (err: any) {
-      setScript({ error: err.message || "Generation failed" });
+    } catch (err) {
+      setScript({ error: errMessage(err, "Generation failed") });
     } finally {
       setGenerating(false);
     }
@@ -208,7 +221,7 @@ export default function AdDetailPage() {
             <div className="mb-6">
               <h4 className="text-sm font-semibold text-gray-700 mb-3">Hook variations</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {script.hooks.map((hook: any, i: number) => (
+                {script.hooks.map((hook, i) => (
                   <div key={i} className="bg-gray-50 rounded-lg p-4">
                     <span className="text-xs font-medium text-gray-500 uppercase mb-2 block">
                       {hook.type}

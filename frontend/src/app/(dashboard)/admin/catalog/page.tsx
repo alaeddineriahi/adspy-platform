@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Loader2, Search, Trash2, Database } from "lucide-react";
 import { adminApi } from "@/lib/admin";
+import { errMessage } from "@/lib/api";
 
 interface CatalogOverview {
   total_ads: number;
@@ -33,8 +34,8 @@ export default function AdminCatalogPage() {
       const d = await adminApi.browseAds(getToken, q, country);
       setAds(d.results);
       setTotal(d.total);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMessage(e));
     }
   }, [getToken, q, country]);
 
@@ -53,8 +54,8 @@ export default function AdminCatalogPage() {
       await adminApi.deleteAd(getToken, id);
       setAds((prev) => prev.filter((a) => a.id !== id));
       setTotal((t) => t - 1);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMessage(e));
     } finally {
       setDeleting("");
     }

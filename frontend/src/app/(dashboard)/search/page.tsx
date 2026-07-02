@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Search, SlidersHorizontal, Loader2, TrendingUp } from "lucide-react";
+import { Search, Loader2, TrendingUp } from "lucide-react";
 import { AdCard } from "@/components/ads/AdCard";
 import { Ad } from "@/types";
 

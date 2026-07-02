@@ -6,9 +6,10 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import {
   ArrowLeft, Loader2, ShieldAlert, RotateCcw, Ban, ShieldCheck,
-  ExternalLink, Copy, CheckCheck,
+  Copy, CheckCheck,
 } from "lucide-react";
 import { adminApi } from "@/lib/admin";
+import { errMessage } from "@/lib/api";
 
 interface Detail {
   user: { id: string; email: string; name: string | null; role: string; created_at: number };
@@ -39,8 +40,8 @@ export default function AdminUserDetailPage() {
       const d = await adminApi.userDetail(getToken, id as string);
       setData(d);
       setPlan(d.subscription.plan === "free" ? "pro" : d.subscription.plan);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMessage(e));
     }
   }, [getToken, id]);
 
@@ -54,8 +55,8 @@ export default function AdminUserDetailPage() {
     try {
       await fn();
       await load();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMessage(e));
     } finally {
       setBusy("");
     }
@@ -146,7 +147,7 @@ export default function AdminUserDetailPage() {
             onClick={() => run("reset", () => adminApi.resetCredits(getToken, id as string))}
             className="w-full mt-2 flex items-center justify-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50 disabled:opacity-50"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> Reset this month's usage
+            <RotateCcw className="w-3.5 h-3.5" /> Reset this month&apos;s usage
           </button>
         </div>
 
@@ -214,7 +215,7 @@ export default function AdminUserDetailPage() {
             {ticket && (
               <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <p className="text-xs text-amber-800 mb-2">
-                  Open this in a <strong>private/incognito window</strong> — not this tab, or you'll
+                  Open this in a <strong>private/incognito window</strong> — not this tab, or you&apos;ll
                   sign yourself out. Expires in 5 minutes.
                 </p>
                 <div className="flex items-center gap-2">

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Zap, Loader2, Film, Copy, CheckCheck } from "lucide-react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { useAuth } from "@clerk/nextjs";
+import { authFetch, apiError } from "@/lib/api";
 
 interface Hook {
   type: string;
@@ -27,6 +27,7 @@ interface VideoScript {
 }
 
 export default function AIToolsPage() {
+  const { getToken } = useAuth();
   const [product, setProduct] = useState("");
   const [audience, setAudience] = useState("");
   const [platform, setPlatform] = useState("tiktok");
@@ -44,12 +45,12 @@ export default function AIToolsPage() {
     setError("");
     setScript(null);
     try {
-      const res = await fetch(`${API_URL}/api/ai/generate-video-script`, {
+      const res = await authFetch(getToken, "/api/ai/generate-video-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product, audience, platform, language, duration, tone }),
       });
-      if (!res.ok) throw new Error(`API error ${res.status}`);
+      if (!res.ok) throw new Error(await apiError(res));
       setScript(await res.json());
     } catch (err: any) {
       setError(err.message || "Generation failed");

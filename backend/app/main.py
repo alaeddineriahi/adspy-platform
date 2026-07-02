@@ -63,6 +63,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiter added BEFORE CORS so CORS wraps it — 429 responses still carry
+# CORS headers and the browser can read them instead of masking as a CORS error.
+from app.core.ratelimit import RateLimitMiddleware  # noqa: E402
+
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.FRONTEND_URL],

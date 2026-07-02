@@ -8,13 +8,15 @@ The `/capabilities` endpoint advertises the seam for the future live-Meta phase
 (chat is on now; meta_execution flips true once the executor lands).
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Literal, Optional
 
 from app.ai.media_buyer import stream_chat
+from app.core.auth import get_user_id
 from app.core.config import settings
+from app.core.credits import spend_credits
 
 router = APIRouter()
 
@@ -46,8 +48,10 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
-    """Stream the media-buyer's reply (text/plain, token-by-token)."""
+async def chat(req: ChatRequest, uid: str = Depends(get_user_id)):
+    """Stream the media-buyer's reply (text/plain, token-by-token). Costs 1 credit."""
+    # Spend before the stream opens so an out-of-credits user gets a clean 402.
+    await spend_credits(uid)
     history = [m.model_dump() for m in req.messages if m.content.strip()][-_MAX_MESSAGES:]
     profile = req.profile.model_dump(exclude_none=True) if req.profile else None
 

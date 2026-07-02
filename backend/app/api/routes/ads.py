@@ -11,30 +11,8 @@ from app.core.elasticsearch import (
     search_ads as es_search,
     get_trending_ads as es_trending,
 )
-from app.scraping.meta_official import ingest as meta_ingest
 
 router = APIRouter()
-
-
-@router.post("/ingest")
-async def ingest_meta_ads(
-    country: str = Query("TN", description="ISO country code"),
-    q: str = Query("", description="Search terms (optional)"),
-    limit: int = Query(50, ge=1, le=100),
-    ad_active_status: str = Query("ALL", description="ACTIVE, INACTIVE, or ALL"),
-    ad_type: str = Query("ALL", description="ALL or POLITICAL_AND_ISSUE_ADS"),
-):
-    """Pull ads from the official Meta Ad Library and index them into Elasticsearch."""
-    try:
-        return await meta_ingest(
-            country=country,
-            search_terms=q,
-            limit=limit,
-            ad_active_status=ad_active_status,
-            ad_type=ad_type,
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/search")

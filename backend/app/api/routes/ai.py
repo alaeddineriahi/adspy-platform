@@ -1,8 +1,11 @@
 """
 AI API routes — script generation, copy writing, creative analysis.
+
+Each generation requires a signed-in user and spends 1 AI credit (402 when
+the monthly allowance is exhausted) — see app/core/credits.py.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
@@ -12,6 +15,8 @@ from app.ai.script_generator import (
     generate_video_script,
     analyze_creative,
 )
+from app.core.auth import get_user_id
+from app.core.credits import spend_credits
 from app.core.elasticsearch import get_es_client
 
 router = APIRouter()
@@ -48,9 +53,9 @@ class AnalyzeRequest(BaseModel):
 
 
 @router.post("/generate-script")
-async def api_generate_script(req: ScriptRequest):
+async def api_generate_script(req: ScriptRequest, uid: str = Depends(get_user_id)):
     """Generate hooks + video script from a winning ad."""
-    # Fetch the ad from Elasticsearch
+    # Fetch the ad from Elasticsearch first — don't spend a credit on a 404.
     es = get_es_client()
     try:
         ad_data = await es.get(index="ads", id=req.ad_id)
@@ -60,18 +65,21 @@ async def api_generate_script(req: ScriptRequest):
     finally:
         await es.close()
 
+    credits = await spend_credits(uid)
+
     result = await generate_script(
         ad_copy=ad.get("copy_text", ""),
         advertiser=ad.get("advertiser_name", ""),
         platform=ad.get("platform", "meta"),
     )
 
-    return {**result, "credits_used": 1, "source_ad_id": req.ad_id}
+    return {**result, "credits": credits, "source_ad_id": req.ad_id}
 
 
 @router.post("/generate-video-script")
-async def api_generate_video_script(req: VideoScriptRequest):
+async def api_generate_video_script(req: VideoScriptRequest, uid: str = Depends(get_user_id)):
     """Generate a high-converting short-form video ad script from a product brief."""
+    credits = await spend_credits(uid)
     result = await generate_video_script(
         product=req.product,
         audience=req.audience,
@@ -80,12 +88,13 @@ async def api_generate_video_script(req: VideoScriptRequest):
         duration=req.duration,
         tone=req.tone,
     )
-    return {**result, "credits_used": 1}
+    return {**result, "credits": credits}
 
 
 @router.post("/generate-copy")
-async def api_generate_copy(req: CopyRequest):
+async def api_generate_copy(req: CopyRequest, uid: str = Depends(get_user_id)):
     """Generate ad copy from product brief."""
+    credits = await spend_credits(uid)
     result = await generate_copy(
         product=req.product,
         audience=req.audience,
@@ -93,11 +102,11 @@ async def api_generate_copy(req: CopyRequest):
         language=req.language,
         num_variations=req.num_variations,
     )
-    return {**result, "credits_used": 1}
+    return {**result, "credits": credits}
 
 
 @router.post("/analyze")
-async def api_analyze(req: AnalyzeRequest):
+async def api_analyze(req: AnalyzeRequest, uid: str = Depends(get_user_id)):
     """Analyze and score an ad creative."""
     copy_text = req.copy_text
     platform = req.platform
@@ -121,9 +130,10 @@ async def api_analyze(req: AnalyzeRequest):
     if not copy_text:
         raise HTTPException(status_code=400, detail="No ad copy to analyze")
 
+    credits = await spend_credits(uid)
     result = await analyze_creative(
         ad_copy=copy_text,
         platform=platform,
         ad_format=ad_format,
     )
-    return {**result, "credits_used": 1}
+    return {**result, "credits": credits}

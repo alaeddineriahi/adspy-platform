@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Megaphone, Send, Loader2, Sparkles, RotateCcw, SlidersHorizontal, Check } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { authFetch, apiError, API_URL } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const PROFILE_KEY = "adspy_buyer_profile";
+const CHAT_KEY = "adspy_buyer_chat";
 
 interface Msg {
   role: "user" | "assistant";
@@ -126,6 +128,7 @@ function profileSummary(p: Profile): string {
 }
 
 export default function MediaBuyerPage() {
+  const { getToken } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -136,12 +139,19 @@ export default function MediaBuyerPage() {
   const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load saved profile + optional spied-ad context on mount.
+  // Load saved profile + previous conversation + optional spied-ad context on mount.
   useEffect(() => {
     try {
       const saved = localStorage.getItem(PROFILE_KEY);
       if (saved) setProfile({ ...EMPTY_PROFILE, ...JSON.parse(saved) });
       else setShowSetup(true); // first visit: prompt them to fill it
+    } catch {}
+    try {
+      const chat = localStorage.getItem(CHAT_KEY);
+      if (chat) {
+        const parsed = JSON.parse(chat);
+        if (Array.isArray(parsed)) setMessages(parsed);
+      }
     } catch {}
     setLoaded(true);
 
@@ -169,6 +179,15 @@ export default function MediaBuyerPage() {
     }
   }, [profile, loaded]);
 
+  // Persist the conversation once each reply finishes (not on every token).
+  useEffect(() => {
+    if (!loaded || streaming) return;
+    try {
+      if (messages.length) localStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-40)));
+      else localStorage.removeItem(CHAT_KEY);
+    } catch {}
+  }, [messages, streaming, loaded]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
@@ -191,12 +210,12 @@ export default function MediaBuyerPage() {
       setInput("");
       setStreaming(true);
       try {
-        const res = await fetch(`${API_URL}/api/mediabuyer/chat`, {
+        const res = await authFetch(getToken, "/api/mediabuyer/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: history, ad_id: adId, profile: cleanProfile(profile) }),
         });
-        if (!res.ok || !res.body) throw new Error(`API error ${res.status}`);
+        if (!res.ok || !res.body) throw new Error(await apiError(res));
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let acc = "";
@@ -215,7 +234,7 @@ export default function MediaBuyerPage() {
           const next = [...prev];
           next[next.length - 1] = {
             role: "assistant",
-            content: `⚠️ ${err.message || "Something went wrong"}. Is the backend running?`,
+            content: `⚠️ ${err.message || "Something went wrong. Is the backend running?"}`,
           };
           return next;
         });
@@ -223,7 +242,7 @@ export default function MediaBuyerPage() {
         setStreaming(false);
       }
     },
-    [messages, streaming, adId, profile]
+    [messages, streaming, adId, profile, getToken]
   );
 
   const onKeyDown = (e: React.KeyboardEvent) => {

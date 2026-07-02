@@ -1,14 +1,29 @@
 """
 Payment routes - Konnect (primary) + Flouci (secondary).
-All prices in TND for Tunisian market.
+All prices in TND for the Tunisian market; plan numbers live in PRICING.md.
+
+Flow: an authenticated user hits /subscribe -> we create the gateway checkout
+AND store a PaymentIntent binding payment_ref -> (user, plan). The webhook /
+verification endpoints then look the ref up locally and activate the
+subscription in Postgres — nothing in the callback is trusted for identity.
 """
 
-from fastapi import APIRouter, HTTPException, Request, Depends
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+
+from sqlalchemy import select
+
+from app.core.auth import get_user_id
+from app.core.credits import PLAN_CREDITS, activate_subscription
+from app.core.database import async_session
+from app.models.billing import PaymentIntent
 from app.payments.konnect import konnect, PLAN_PRICES
 from app.payments.flouci import flouci
 
+logger = logging.getLogger("adspy.payments")
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
@@ -27,11 +42,35 @@ class SubscribeResponse(BaseModel):
     plan: str
 
 
+async def _store_intent(payment_ref: str, user_id: str, plan: str, provider: str) -> None:
+    async with async_session() as db:
+        db.add(PaymentIntent(payment_ref=payment_ref, user_id=user_id,
+                             plan=plan, provider=provider))
+        await db.commit()
+
+
+async def _complete_intent(payment_ref: str) -> Optional[PaymentIntent]:
+    """Mark an intent completed and activate the subscription. Idempotent."""
+    async with async_session() as db:
+        intent = await db.scalar(
+            select(PaymentIntent).where(PaymentIntent.payment_ref == payment_ref)
+        )
+        if intent is None:
+            return None
+        already_done = intent.status == "completed"
+        intent.status = "completed"
+        await db.commit()
+    if not already_done:
+        await activate_subscription(intent.user_id, intent.plan, payment_ref=payment_ref)
+        logger.info("Activated %s for user %s (ref %s)", intent.plan, intent.user_id, payment_ref)
+    return intent
+
+
 # --- Subscription endpoints ---
 
 @router.post("/subscribe", response_model=SubscribeResponse)
-async def create_subscription(req: SubscribeRequest):
-    """Create a payment link for a subscription plan."""
+async def create_subscription(req: SubscribeRequest, uid: str = Depends(get_user_id)):
+    """Create a payment link for a subscription plan (requires a signed-in user)."""
     if req.plan not in PLAN_PRICES:
         raise HTTPException(400, f"Invalid plan. Choose: {list(PLAN_PRICES.keys())}")
 
@@ -42,28 +81,30 @@ async def create_subscription(req: SubscribeRequest):
             amount_millimes=amount,
             description=f"AdSpy {req.plan} subscription",
         )
+        await _store_intent(payment.payment_id, uid, req.plan, "flouci")
         return SubscribeResponse(
             pay_url=payment.pay_url,
             payment_ref=payment.payment_id,
             amount_tnd=amount / 1000,
             plan=req.plan,
         )
-    else:
-        # Default: Konnect
-        payment = await konnect.init_subscription(
-            plan=req.plan,
-            user_email="",  # filled from auth context in production
-            user_id="temp",
-            first_name=req.first_name or "",
-            last_name=req.last_name or "",
-            phone=req.phone or "",
-        )
-        return SubscribeResponse(
-            pay_url=payment.pay_url,
-            payment_ref=payment.payment_ref,
-            amount_tnd=amount / 1000,
-            plan=req.plan,
-        )
+
+    # Default: Konnect
+    payment = await konnect.init_subscription(
+        plan=req.plan,
+        user_email="",
+        user_id=uid,
+        first_name=req.first_name or "",
+        last_name=req.last_name or "",
+        phone=req.phone or "",
+    )
+    await _store_intent(payment.payment_ref, uid, req.plan, "konnect")
+    return SubscribeResponse(
+        pay_url=payment.pay_url,
+        payment_ref=payment.payment_ref,
+        amount_tnd=amount / 1000,
+        plan=req.plan,
+    )
 
 
 # --- Webhook endpoints ---
@@ -71,17 +112,15 @@ async def create_subscription(req: SubscribeRequest):
 @router.get("/webhook/konnect")
 async def konnect_webhook(payment_ref: str):
     """Konnect sends a GET request with payment_ref as query param."""
+    # Always re-verify with Konnect's API — never trust the callback alone.
     details = await konnect.get_payment(payment_ref)
 
     if details.status == "completed":
-        # TODO: activate user subscription in DB
-        # parse order_id format: sub_{user_id}_{plan}
-        parts = (details.order_id or "").split("_")
-        if len(parts) >= 3:
-            user_id = parts[1]
-            plan = parts[2]
-            # await activate_subscription(user_id, plan)
-        return {"status": "ok", "payment": "completed"}
+        intent = await _complete_intent(payment_ref)
+        if intent is None:
+            logger.warning("Konnect webhook for unknown payment_ref %s", payment_ref)
+            return {"status": "ok", "payment": "completed", "subscription": "unknown_ref"}
+        return {"status": "ok", "payment": "completed", "subscription": "activated"}
 
     return {"status": "pending"}
 
@@ -91,8 +130,11 @@ async def verify_flouci_payment(payment_id: str):
     """Verify a Flouci payment status."""
     status = await flouci.verify_payment(payment_id)
     if status.status == "SUCCESS":
-        # TODO: activate user subscription in DB
-        return {"status": "ok", "payment": "completed"}
+        intent = await _complete_intent(payment_id)
+        if intent is None:
+            logger.warning("Flouci verify for unknown payment_id %s", payment_id)
+            return {"status": "ok", "payment": "completed", "subscription": "unknown_ref"}
+        return {"status": "ok", "payment": "completed", "subscription": "activated"}
     return {"status": status.status.lower()}
 
 
@@ -100,7 +142,7 @@ async def verify_flouci_payment(payment_id: str):
 
 @router.get("/plans")
 async def get_plans():
-    """Return available plans with TND pricing."""
+    """Available plans — numbers kept in sync with PRICING.md."""
     return {
         "plans": [
             {
@@ -108,16 +150,16 @@ async def get_plans():
                 "name": "Free",
                 "price_tnd": 0,
                 "searches_per_day": 20,
-                "ai_credits_per_month": 5,
+                "ai_credits_per_month": PLAN_CREDITS["free"],
                 "saved_ads": 10,
                 "brand_spy": False,
             },
             {
                 "id": "pro",
                 "name": "Pro",
-                "price_tnd": 29,
+                "price_tnd": PLAN_PRICES["pro"] / 1000,
                 "searches_per_day": -1,  # unlimited
-                "ai_credits_per_month": 50,
+                "ai_credits_per_month": PLAN_CREDITS["pro"],
                 "saved_ads": -1,
                 "brand_spy": True,
                 "brand_spy_limit": 5,
@@ -125,9 +167,9 @@ async def get_plans():
             {
                 "id": "agency",
                 "name": "Agency",
-                "price_tnd": 79,
+                "price_tnd": PLAN_PRICES["agency"] / 1000,
                 "searches_per_day": -1,
-                "ai_credits_per_month": 200,
+                "ai_credits_per_month": PLAN_CREDITS["agency"],
                 "saved_ads": -1,
                 "brand_spy": True,
                 "brand_spy_limit": 25,

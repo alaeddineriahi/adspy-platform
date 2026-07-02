@@ -39,15 +39,15 @@ class PaymentDetails:
     payer_email: Optional[str] = None
 
 
-# Plan prices in MILLIMES (1 TND = 1000 millimes)
+# Plan prices in MILLIMES (1 TND = 1000 millimes) — keep in sync with PRICING.md §3.
 PLAN_PRICES = {
-    "pro": 29_000,       # 29 TND/month
-    "agency": 79_000,    # 79 TND/month
+    "pro": 79_000,       # 79 TND/month
+    "agency": 199_000,   # 199 TND/month
 }
 
 PLAN_DESCRIPTIONS = {
-    "pro": "AdSpy Pro - Recherche illimitée, 50 crédits IA, brand spy",
-    "agency": "AdSpy Agency - Tout illimité, 200 crédits IA, 25 marques",
+    "pro": "AdSpy Pro - Recherche illimitée, 400 crédits IA, brand spy",
+    "agency": "AdSpy Agency - Tout illimité, 1500 crédits IA, 25 marques",
 }
 
 

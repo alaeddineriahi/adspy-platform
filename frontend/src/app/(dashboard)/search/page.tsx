@@ -120,8 +120,6 @@ export default function SearchPage() {
           <option value="EG">Egypt</option>
           <option value="SA">Saudi Arabia</option>
           <option value="AE">UAE</option>
-          <option value="KW">Kuwait</option>
-          <option value="QA">Qatar</option>
         </select>
 
         <select

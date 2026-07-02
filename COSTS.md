@@ -103,4 +103,5 @@ The first real bill will be whichever comes first: Anthropic usage or a producti
 |---|---|---|
 | 2026-06-29 | Baseline: Groq free, all infra local/free. LLM spend $0. | — |
 | 2026-06-29 | Media-buyer playbook added (~1,984 tok) → system prompt now ~2,900 tok/msg. | raises per-msg input; makes caching high-value |
+| 2026-07-02 | **Credit enforcement + rate limits live**: AI endpoints require Clerk auth, spend 1 credit each (free=10/mo), and are capped at 20 req/min per user. | Caps worst-case LLM spend per free user at ~10 generations/month; abuse (scripted hammering) now bounded — projections in §4 become hard ceilings. |
 | _next_ | _e.g. enable prompt caching / flip to Sonnet 4.6 / go to production_ | _fill in_ |

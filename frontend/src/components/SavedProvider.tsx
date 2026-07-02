@@ -8,9 +8,8 @@ import {
   useCallback,
   ReactNode,
 } from "react";
-import { useUser } from "@clerk/nextjs";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { useAuth } from "@clerk/nextjs";
+import { authFetch } from "@/lib/api";
 
 interface SavedCtx {
   savedIds: Set<string>;
@@ -29,21 +28,21 @@ export function useSaved(): SavedCtx {
 }
 
 export function SavedProvider({ children }: { children: ReactNode }) {
-  const { user } = useUser();
-  const userId = user?.id ?? "anonymous";
+  const { userId: clerkId, getToken, isLoaded } = useAuth();
+  const userId = clerkId ?? "anonymous";
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
+    if (!isLoaded) return;
     try {
-      const res = await fetch(`${API_URL}/api/user/saved/ids`, {
-        headers: { "X-User-Id": userId },
-      });
+      const res = await authFetch(getToken, "/api/user/saved/ids");
+      if (!res.ok) return; // signed out → 401; keep whatever we have
       const data = await res.json();
       setSavedIds(new Set<string>(data.ad_ids || []));
     } catch {
       /* offline / backend down — leave as-is */
     }
-  }, [userId]);
+  }, [isLoaded, getToken]);
 
   useEffect(() => {
     refresh();
@@ -61,11 +60,12 @@ export function SavedProvider({ children }: { children: ReactNode }) {
         return next;
       });
       try {
-        await fetch(`${API_URL}/api/user/${has ? "unsave" : "save"}`, {
+        const res = await authFetch(getToken, `/api/user/${has ? "unsave" : "save"}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-User-Id": userId },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ad_id: id }),
         });
+        if (!res.ok) throw new Error(`save failed: ${res.status}`);
       } catch {
         // revert on failure
         setSavedIds((prev) => {
@@ -76,7 +76,7 @@ export function SavedProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [savedIds, userId]
+    [savedIds, getToken]
   );
 
   return (

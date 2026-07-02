@@ -2,31 +2,31 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Bookmark, Loader2 } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
 import { useSaved } from "@/components/SavedProvider";
+import { authFetch } from "@/lib/api";
 import { Ad } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 export default function SavedPage() {
-  const { userId, savedIds } = useSaved();
+  const { savedIds } = useSaved();
+  const { getToken, isLoaded } = useAuth();
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (!isLoaded) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/user/saved/ads`, {
-        headers: { "X-User-Id": userId },
-      });
-      const data = await res.json();
+      const res = await authFetch(getToken, "/api/user/saved/ads");
+      const data = res.ok ? await res.json() : { results: [] };
       setAds(data.results || []);
     } catch {
       setAds([]);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [isLoaded, getToken]);
 
   useEffect(() => {
     load();

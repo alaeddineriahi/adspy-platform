@@ -7,12 +7,13 @@ import {
   Copy, CheckCheck, Loader2, Calendar
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
+import { authFetch, apiError, API_URL } from "@/lib/api";
 import { Ad } from "@/types";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AdDetailPage() {
   const { id } = useParams();
+  const { getToken } = useAuth();
   const [ad, setAd] = useState<Ad | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -38,15 +39,15 @@ export default function AdDetailPage() {
   const generateScript = async () => {
     setGenerating(true);
     try {
-      const res = await fetch(`${API_URL}/api/ai/generate-script`, {
+      const res = await authFetch(getToken, "/api/ai/generate-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ad_id: id, language: ad?.language || "en" }),
       });
-      const data = await res.json();
-      setScript(data);
-    } catch (err) {
-      console.error(err);
+      if (!res.ok) throw new Error(await apiError(res));
+      setScript(await res.json());
+    } catch (err: any) {
+      setScript({ error: err.message || "Generation failed" });
     } finally {
       setGenerating(false);
     }
@@ -175,6 +176,8 @@ export default function AdDetailPage() {
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <Zap className="w-5 h-5 text-blue-600" /> AI-generated script
           </h3>
+
+          {script.error && <p className="text-sm text-red-600">{script.error}</p>}
 
           {script.analysis && (
             <div className="bg-blue-50 rounded-lg p-4 mb-6">

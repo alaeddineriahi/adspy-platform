@@ -115,6 +115,7 @@ up a tier; every feature that adds real cost → re-check COSTS.md before settin
 | Date | Change | Rationale |
 |---|---|---|
 | 2026-06-29 | Baseline strategy set: Free / Pro ~79 TND / Agency ~199 TND; 10 / 400 / 1,500 AI credits. Credits = the metered AI lever; search/brand-spy unlimited on paid. | Grounded in COSTS.md (~1–2¢/credit) + MENA value-based positioning. |
-| _pending_ | Sync `payments.py` `/plans` + `konnect.PLAN_PRICES` to final numbers (currently 29/79 TND, 5/50/200 credits). | Code still holds placeholders. |
-| _pending_ | Build per-user **credit metering + enforcement** before launch. | Protects margin (§4). |
-| _next_ | _e.g. add live-Meta tier / launch founder pricing / raise Pro to 79_ | _fill in_ |
+| 2026-07-02 | ✅ Code synced to strategy: `konnect.PLAN_PRICES` = 79/199 TND, `/api/payments/plans` = 10/400/1500 credits. | No more placeholder prices in the product. |
+| 2026-07-02 | ✅ **Credit metering + enforcement LIVE**: every AI call (scripts, copy, analyze, media-buyer msg) spends 1 credit; 402 at the monthly cap; `/api/user/usage` returns real numbers. Backed by `subscriptions` + `credit_usage` tables. | The margin protection §4 assumed now actually exists. |
+| 2026-07-02 | ✅ Payment→subscription activation wired: checkout stores a `payment_intents` row; Konnect webhook / Flouci verify re-check with the gateway then activate the plan (31 days) in Postgres. Backend auth via Clerk JWT; rate limits on AI endpoints (20/min). | Payments are now *functionally* launchable — remaining blocker is real Konnect/Flouci keys + a pricing page UI. |
+| _next_ | _e.g. add live-Meta tier / launch founder pricing_ | _fill in_ |

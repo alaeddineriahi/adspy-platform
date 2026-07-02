@@ -1,26 +1,25 @@
 """
-Users API routes — per-user saved ads ("swipe file"), grouped by board.
+Users API routes — per-user saved ads ("swipe file"), grouped by board, plus
+plan/credit usage.
 
-Persisted in Postgres and scoped to the Clerk user id (sent as the `X-User-Id`
-header by the frontend). Falls back to "anonymous" so it still works in local dev
-before auth is fully wired. Backend Clerk-JWT verification is a later hardening step.
+Every route requires a verified Clerk session token (Authorization: Bearer),
+enforced by the get_user_id dependency — the old spoofable X-User-Id header
+is no longer trusted (except in DEBUG when Clerk isn't configured at all).
 """
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 
 from sqlalchemy import select, delete, func
 
+from app.core.auth import get_user_id
+from app.core.credits import get_usage as credits_usage
 from app.core.database import async_session
 from app.core.elasticsearch import get_es_client
 from app.models.saved import SavedAd
 
 router = APIRouter()
-
-
-def _uid(x_user_id: Optional[str]) -> str:
-    return (x_user_id or "").strip() or "anonymous"
 
 
 class SaveRequest(BaseModel):
@@ -29,9 +28,8 @@ class SaveRequest(BaseModel):
 
 
 @router.post("/save")
-async def save_ad(req: SaveRequest, x_user_id: Optional[str] = Header(None)):
+async def save_ad(req: SaveRequest, uid: str = Depends(get_user_id)):
     """Save an ad to a board (idempotent)."""
-    uid = _uid(x_user_id)
     async with async_session() as db:
         exists = await db.scalar(
             select(SavedAd.id).where(
@@ -47,9 +45,8 @@ async def save_ad(req: SaveRequest, x_user_id: Optional[str] = Header(None)):
 
 
 @router.post("/unsave")
-async def unsave_ad(req: SaveRequest, x_user_id: Optional[str] = Header(None)):
+async def unsave_ad(req: SaveRequest, uid: str = Depends(get_user_id)):
     """Remove an ad from a board (idempotent)."""
-    uid = _uid(x_user_id)
     async with async_session() as db:
         await db.execute(
             delete(SavedAd).where(
@@ -63,9 +60,8 @@ async def unsave_ad(req: SaveRequest, x_user_id: Optional[str] = Header(None)):
 
 
 @router.get("/saved/ids")
-async def saved_ids(x_user_id: Optional[str] = Header(None)):
+async def saved_ids(uid: str = Depends(get_user_id)):
     """Lightweight: just the set of saved ad ids (for showing save state in lists)."""
-    uid = _uid(x_user_id)
     async with async_session() as db:
         rows = await db.execute(
             select(SavedAd.ad_id).where(SavedAd.user_id == uid)
@@ -74,9 +70,8 @@ async def saved_ids(x_user_id: Optional[str] = Header(None)):
 
 
 @router.get("/saved")
-async def saved_boards(x_user_id: Optional[str] = Header(None)):
+async def saved_boards(uid: str = Depends(get_user_id)):
     """Boards summary: name + count, plus total."""
-    uid = _uid(x_user_id)
     async with async_session() as db:
         rows = await db.execute(
             select(SavedAd.board, func.count(SavedAd.id))
@@ -90,12 +85,11 @@ async def saved_boards(x_user_id: Optional[str] = Header(None)):
 
 @router.get("/saved/ads")
 async def saved_ad_docs(
-    x_user_id: Optional[str] = Header(None),
+    uid: str = Depends(get_user_id),
     board: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ):
     """Full ad docs for the user's saved ads (newest first), hydrated from ES."""
-    uid = _uid(x_user_id)
     async with async_session() as db:
         q = select(SavedAd.ad_id).where(SavedAd.user_id == uid)
         if board:
@@ -123,12 +117,6 @@ async def saved_ad_docs(
 
 
 @router.get("/usage")
-async def get_usage(x_user_id: Optional[str] = Header(None)):
-    """Get the user's plan and credit usage. (Credit metering is a later track — placeholder.)"""
-    return {
-        "plan": "free",
-        "searches_today": 0,
-        "searches_limit": 20,
-        "credits_remaining": 5,
-        "credits_limit": 5,
-    }
+async def get_usage(uid: str = Depends(get_user_id)):
+    """The user's active plan and real AI-credit usage for the current month."""
+    return await credits_usage(uid)

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.routes import ads, brands, ai, users, payments, ingestion, mediabuyer
+from app.api.routes import ads, brands, ai, users, payments, ingestion, mediabuyer, admin
 
 logger = logging.getLogger("adspy")
 logging.basicConfig(level=logging.INFO)
@@ -86,6 +86,7 @@ app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(mediabuyer.router, prefix="/api/mediabuyer", tags=["mediabuyer"])
 app.include_router(users.router, prefix="/api/user", tags=["users"])
 app.include_router(payments.router, prefix="/api", tags=["payments"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
 @app.get("/health")

@@ -21,6 +21,7 @@ from typing import Optional
 from fastapi import Header, HTTPException
 from starlette.concurrency import run_in_threadpool
 
+from app.core.account_flags import is_banned
 from app.core.config import settings
 
 logger = logging.getLogger("adspy.auth")
@@ -84,16 +85,20 @@ async def get_user_id(
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
 
+    uid: Optional[str] = None
     if token and _jwk_client() is not None:
         try:
             # PyJWKClient does blocking network I/O on a JWKS cache miss.
-            return await run_in_threadpool(_verify, token)
+            uid = await run_in_threadpool(_verify, token)
         except Exception as e:  # noqa: BLE001 — any verification failure is a 401
             raise HTTPException(status_code=401, detail=f"Invalid session token: {e}")
-
-    # Dev-only escape hatch: Clerk not configured at all + DEBUG.
-    if _jwk_client() is None and settings.DEBUG:
+    elif _jwk_client() is None and settings.DEBUG:
+        # Dev-only escape hatch: Clerk not configured at all + DEBUG.
         logger.warning("Auth in DEV-FALLBACK mode (Clerk not configured) — trusting X-User-Id.")
-        return (x_user_id or "").strip() or "anonymous"
+        uid = (x_user_id or "").strip() or "anonymous"
+    else:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
 
-    raise HTTPException(status_code=401, detail="Missing bearer token")
+    if await is_banned(uid):
+        raise HTTPException(status_code=403, detail="This account has been suspended.")
+    return uid

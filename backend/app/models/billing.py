@@ -8,7 +8,7 @@ look the ref up here instead of trusting anything in the callback.
 
 import uuid
 
-from sqlalchemy import Column, String, Integer, DateTime, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
@@ -24,6 +24,10 @@ class Subscription(Base):
     status = Column(String(32), nullable=False, default="active")      # active | cancelled
     current_period_end = Column(DateTime(timezone=True), nullable=True)
     payment_ref = Column(String(255), nullable=True)                   # last successful payment
+    # Admin-granted extra credits on top of the plan's monthly allowance (comps,
+    # goodwill, support fixes) — added to PLAN_CREDITS[plan] in credits.py.
+    credit_bonus = Column(Integer, nullable=False, default=0)
+    is_comp = Column(Boolean, nullable=False, default=False)           # admin override, not a real payment
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

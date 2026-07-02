@@ -9,9 +9,10 @@ Self-serve ingestion API.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
 
+from app.core.admin_auth import require_admin
 from app.core.config import settings
 from app.ingestion.pipeline import (
     DEFAULT_COUNTRIES,
@@ -24,7 +25,9 @@ from app.ingestion.session import session_available, describe_source, set_manual
 from app.ingestion.scraper import import_search_template, has_search_template
 
 logger = logging.getLogger("adspy.ingest.api")
-router = APIRouter()
+# Every route needs the FB session cookie or triggers real scraping — gate
+# the whole router behind admin (previously wide open to any caller).
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 class CookieRequest(BaseModel):

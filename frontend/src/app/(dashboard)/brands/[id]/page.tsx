@@ -41,7 +41,7 @@ export default function BrandDetailPage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-8 max-w-7xl mx-auto">
       <Link
         href="/brands"
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4"

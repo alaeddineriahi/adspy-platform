@@ -70,7 +70,7 @@ export default function AdminCatalogPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-8">
+    <div className="p-8 max-w-6xl mx-auto space-y-8">
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {overview && (

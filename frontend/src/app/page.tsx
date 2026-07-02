@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { CSSProperties } from "react";
 import { ArrowRight, Search, Megaphone, Zap, Eye } from "lucide-react";
+import { Hero3D } from "@/components/Hero3D";
+import { Reveal } from "@/components/Reveal";
 
 const features = [
   {
@@ -24,11 +27,13 @@ const features = [
   },
 ];
 
+const delay = (ms: number) => ({ "--delay": `${ms}ms` } as CSSProperties);
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#fbfbfb] text-[#1d1d1f]">
+    <main className="min-h-screen bg-[#fbfbfb] text-[#1d1d1f] overflow-x-clip">
       {/* Nav */}
-      <nav className="flex items-center justify-between px-6 py-5 max-w-6xl mx-auto">
+      <nav className="relative z-10 flex items-center justify-between px-6 py-5 max-w-6xl mx-auto">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full holo-gradient" />
           <span className="text-xl font-black tracking-tight">AdSpy</span>
@@ -47,43 +52,57 @@ export default function Home() {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto text-center pt-24 pb-16 px-6">
-        {/* Gradient badge pill */}
-        <div className="inline-flex holo-ring rounded-full mb-7">
-          <span className="rounded-full bg-[#fbfbfb] px-5 py-1.5 text-sm font-semibold holo-text">
-            Ad intelligence for MENA
-          </span>
-        </div>
+      <section className="relative max-w-4xl mx-auto text-center pt-20 pb-4 px-6">
+        {/* Decorative gradient orbs */}
+        <div className="orb float-slow w-[420px] h-[420px] -top-24 -left-40" style={{ background: "#3e86c6" }} />
+        <div className="orb float-slow w-[380px] h-[380px] top-10 -right-36" style={{ ...delay(1500), background: "#ec4492" }} />
+        <div className="orb float-slow w-[300px] h-[300px] top-64 left-1/3" style={{ ...delay(3000), background: "#f05427", opacity: 0.18 }} />
 
-        <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-[1.05] mb-6 text-balance">
-          Find the ads that
-          <br />
-          print money.
-        </h1>
-        <p className="text-lg md:text-xl text-[#6e6e73] mb-10 max-w-2xl mx-auto leading-relaxed">
-          AdSpy watches the Meta Ad Library so you don&apos;t have to — surfacing the
-          long-running, scaling winners in your market, then helping you launch your own
-          with an AI media buyer.
-        </p>
+        <div className="relative">
+          {/* Gradient badge pill */}
+          <div className="fade-up inline-flex holo-ring rounded-full mb-7" style={delay(0)}>
+            <span className="rounded-full bg-[#fbfbfb] px-5 py-1.5 text-sm font-semibold holo-text">
+              Ad intelligence for MENA
+            </span>
+          </div>
 
-        <div className="flex items-center justify-center gap-4">
-          <Link href="/sign-up" className="btn-holo px-8 py-3.5 text-base">
-            Start spying free <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link
-            href="/sign-in"
-            className="inline-flex items-center gap-2 px-6 py-3.5 text-base font-semibold text-[#1d1d1f] rounded-full border border-[#e6e6e7] hover:border-[#1d1d1f] transition"
-          >
-            See the library
-          </Link>
+          <h1 className="fade-up text-5xl md:text-7xl font-black tracking-tight leading-[1.05] mb-6 text-balance" style={delay(120)}>
+            Find the ads that
+            <br />
+            print money.
+          </h1>
+          <p className="fade-up text-lg md:text-xl text-[#6e6e73] mb-10 max-w-2xl mx-auto leading-relaxed" style={delay(240)}>
+            AdSpy watches the Meta Ad Library so you don&apos;t have to — surfacing the
+            long-running, scaling winners in your market, then helping you launch your own
+            with an AI media buyer.
+          </p>
+
+          <div className="fade-up flex items-center justify-center gap-4" style={delay(360)}>
+            <Link href="/sign-up" className="btn-holo px-8 py-3.5 text-base">
+              Start spying free <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/sign-in"
+              className="inline-flex items-center gap-2 px-6 py-3.5 text-base font-semibold text-[#1d1d1f] rounded-full border border-[#e6e6e7] bg-white/70 hover:border-[#1d1d1f] transition"
+            >
+              See the library
+            </Link>
+          </div>
+          <p className="fade-up mt-5 text-sm text-[#6e6e73]" style={delay(480)}>
+            Free plan included · Pay in TND · No credit card required
+          </p>
         </div>
-        <p className="mt-5 text-sm text-[#6e6e73]">
-          Free plan included · Pay in TND · No credit card required
-        </p>
       </section>
 
+      {/* 3D rotating ring of spied-ad cards */}
+      <div className="fade-up relative" style={delay(600)}>
+        <Hero3D />
+        {/* soft fade at the bottom of the ring so it melts into the page */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#fbfbfb] to-transparent" />
+      </div>
+
       {/* Social-proof-style strip */}
-      <section className="flex justify-center px-6 pb-20">
+      <Reveal className="flex justify-center px-6 pt-6 pb-20">
         <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 border border-[#e6e6e7] rounded-full px-8 py-3 text-sm text-[#6e6e73] bg-white">
           <span>
             <strong className="text-[#1d1d1f] font-bold">6</strong> MENA markets
@@ -97,11 +116,11 @@ export default function Home() {
             <strong className="text-[#1d1d1f] font-bold">Winners only</strong> — spam filtered out
           </span>
         </div>
-      </section>
+      </Reveal>
 
       {/* Features */}
       <section className="max-w-6xl mx-auto px-6 pb-28">
-        <div className="text-center mb-12">
+        <Reveal className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-black tracking-tight mb-3">
             Everything between <span className="holo-text">spying</span> and{" "}
             <span className="holo-text">scaling</span>
@@ -110,43 +129,45 @@ export default function Home() {
             One tool for the whole loop: find what works, understand why, and launch your
             version — sized to your budget.
           </p>
-        </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {features.map((f) => (
-            <div
-              key={f.title}
-              className="bg-white border border-[#e6e6e7] rounded-2xl p-7 hover:shadow-lg hover:shadow-gray-200/60 transition"
-            >
-              <div className="w-10 h-10 rounded-xl holo-gradient p-px mb-4">
-                <div className="w-full h-full rounded-[11px] bg-white flex items-center justify-center">
-                  <f.icon className="w-5 h-5 text-[#1d1d1f]" />
+          {features.map((f, i) => (
+            <Reveal key={f.title} delay={i * 90}>
+              <div className="tilt h-full bg-white border border-[#e6e6e7] rounded-2xl p-7 hover:shadow-xl hover:shadow-gray-200/70">
+                <div className="w-10 h-10 rounded-xl holo-gradient p-px mb-4">
+                  <div className="w-full h-full rounded-[11px] bg-white flex items-center justify-center">
+                    <f.icon className="w-5 h-5 text-[#1d1d1f]" />
+                  </div>
                 </div>
+                <h3 className="text-lg font-bold mb-1.5">{f.title}</h3>
+                <p className="text-sm text-[#6e6e73] leading-relaxed">{f.text}</p>
               </div>
-              <h3 className="text-lg font-bold mb-1.5">{f.title}</h3>
-              <p className="text-sm text-[#6e6e73] leading-relaxed">{f.text}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* Bottom CTA */}
-      <section className="max-w-4xl mx-auto text-center px-6 pb-24">
-        <div className="holo-ring rounded-3xl">
-          <div className="rounded-[23px] bg-white px-8 py-14">
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight mb-3">
-              Your competitors&apos; best ads.
-              <br />
-              Your next campaign.
-            </h2>
-            <p className="text-[#6e6e73] mb-8">
-              Join the marketers who stopped guessing.
-            </p>
-            <Link href="/sign-up" className="btn-holo px-8 py-3.5 text-base">
-              Start free <ArrowRight className="w-4 h-4" />
-            </Link>
+      <section className="relative max-w-4xl mx-auto text-center px-6 pb-24">
+        <div className="orb float-slow w-[360px] h-[360px] -bottom-10 -right-32" style={{ background: "#a666aa", opacity: 0.22 }} />
+        <Reveal>
+          <div className="holo-ring rounded-3xl">
+            <div className="rounded-[23px] bg-white px-8 py-14">
+              <h2 className="text-3xl md:text-4xl font-black tracking-tight mb-3">
+                Your competitors&apos; best ads.
+                <br />
+                Your next campaign.
+              </h2>
+              <p className="text-[#6e6e73] mb-8">
+                Join the marketers who stopped guessing.
+              </p>
+              <Link href="/sign-up" className="btn-holo px-8 py-3.5 text-base">
+                Start free <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       <footer className="border-t border-[#e6e6e7] py-8 text-center text-sm text-[#6e6e73]">

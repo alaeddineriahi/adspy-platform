@@ -42,7 +42,7 @@ export default function AdminBillingPage() {
   if (error) return <p className="p-8 text-sm text-red-600">{error}</p>;
 
   return (
-    <div className="p-8 max-w-5xl space-y-8">
+    <div className="p-8 max-w-5xl mx-auto space-y-8">
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Active & recent subscriptions</h3>
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

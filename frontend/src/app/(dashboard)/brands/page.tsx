@@ -41,7 +41,7 @@ export default function BrandsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-5xl mx-auto">
       <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
         <Eye className="w-6 h-6" /> Brand Spy
       </h2>

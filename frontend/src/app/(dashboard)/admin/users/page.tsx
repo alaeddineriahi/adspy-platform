@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   }, [load]);
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Users {total > 0 && <span className="text-gray-400 font-normal">({total})</span>}</h2>
       </div>

@@ -74,7 +74,7 @@ export default function AdminUserDetailPage() {
   const isSelf = id === myId;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-8 max-w-4xl mx-auto">
       <Link href="/admin/users" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4">
         <ArrowLeft className="w-4 h-4" /> Users
       </Link>

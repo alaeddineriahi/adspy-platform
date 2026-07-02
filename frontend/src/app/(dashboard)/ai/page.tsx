@@ -89,7 +89,7 @@ export default function AIToolsPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-8 max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
         <Film className="w-6 h-6" /> AI Video Script Generator
       </h2>
@@ -170,7 +170,7 @@ export default function AIToolsPage() {
           {outOfCredits && (
             <Link
               href="/pricing"
-              className="shrink-0 text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500"
+              className="btn-holo shrink-0 px-4 py-2 text-sm"
             >
               Upgrade
             </Link>

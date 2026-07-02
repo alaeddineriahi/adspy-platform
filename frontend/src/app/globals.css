@@ -68,3 +68,116 @@ body {
     padding: 1px;
   }
 }
+
+/* ---------- Motion ---------- */
+
+/* Staggered entrance (Holo's hero-drop-in): set --delay inline per element. */
+.fade-up {
+  opacity: 0;
+  animation: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Scroll reveal — the <Reveal> component adds .in when the block enters view. */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms);
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Gentle bob for decorative orbs. */
+.float-slow {
+  animation: float 9s ease-in-out infinite;
+  animation-delay: var(--delay, 0ms);
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-22px);
+  }
+}
+
+/* Blurred gradient orb — decorative depth behind heroes. */
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ---------- 3D (CSS perspective, same technique as Holo's card ring) ---------- */
+
+.scene3d {
+  perspective: 1500px;
+}
+.ring3d {
+  position: relative;
+  transform-style: preserve-3d;
+  animation: ring-spin 42s linear infinite;
+}
+.ring3d:hover {
+  animation-play-state: paused;
+}
+@keyframes ring-spin {
+  from {
+    transform: rotateX(-6deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-6deg) rotateY(360deg);
+  }
+}
+.ring3d > .ring-card {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) rotateY(var(--i)) translateZ(var(--radius, 330px));
+}
+
+/* Subtle 3D tilt on hover for feature cards. */
+.tilt {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+  transform-style: preserve-3d;
+}
+.tilt:hover {
+  transform: perspective(900px) rotateX(2.5deg) rotateY(-2.5deg) translateY(-4px);
+}
+
+/* Accessibility: kill decorative motion for users who ask for less. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .float-slow,
+  .ring3d {
+    animation: none;
+  }
+  .fade-up {
+    opacity: 1;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .tilt:hover {
+    transform: none;
+  }
+}

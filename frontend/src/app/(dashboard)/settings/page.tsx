@@ -2,7 +2,7 @@ import { Settings } from "lucide-react";
 
 export default function SettingsPage() {
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8 max-w-3xl mx-auto">
       <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
         <Settings className="w-6 h-6" /> Settings
       </h2>

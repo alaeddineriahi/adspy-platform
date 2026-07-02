@@ -195,7 +195,7 @@ export default function AdminIngestionPage() {
   const configured = config?.scraping_configured;
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-5xl mx-auto">
       <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
         <Download className="w-6 h-6" /> Ad Ingestion
       </h2>
@@ -381,7 +381,7 @@ export default function AdminIngestionPage() {
         <button
           onClick={run}
           disabled={starting || running}
-          className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-500 disabled:opacity-50"
+          className="btn-holo w-full py-3 text-sm disabled:opacity-50"
         >
           {starting || running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
           {running ? "Ingestion running…" : starting ? "Starting…" : "Run ingestion"}

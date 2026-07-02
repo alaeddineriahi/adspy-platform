@@ -23,13 +23,13 @@ export function AdCard({ ad }: { ad: Ad }) {
   return (
     <div className="bg-white rounded-2xl border border-[#e6e6e7] overflow-hidden hover:shadow-lg hover:shadow-gray-200/70 hover:-translate-y-0.5 transition-all duration-200 group">
       {/* Media preview */}
-      <div className="aspect-video bg-gray-100 relative flex items-center justify-center">
+      <div className="aspect-video bg-gray-100 relative flex items-center justify-center overflow-hidden">
         {thumb && imgOk ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumb}
             alt={ad.advertiser_name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
             onError={() => setImgOk(false)}
           />
         ) : (

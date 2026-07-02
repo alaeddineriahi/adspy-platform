@@ -92,7 +92,7 @@ export default function AdDetailPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-5xl mx-auto">
       <Link href="/search" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-6">
         <ArrowLeft className="w-4 h-4" /> Back to search
       </Link>
@@ -116,7 +116,8 @@ export default function AdDetailPage() {
           {ad.media_urls && ad.media_urls.length > 1 && (
             <div className="flex gap-2 overflow-x-auto">
               {ad.media_urls.map((url, i) => (
-                <img key={i} src={url} className="w-20 h-20 rounded-lg object-cover border-2 border-transparent hover:border-blue-500 cursor-pointer" />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={url} alt={`${ad.advertiser_name} creative ${i + 1}`} className="w-20 h-20 rounded-xl object-cover border-2 border-transparent hover:border-[#1d1d1f] cursor-pointer" />
               ))}
             </div>
           )}
@@ -164,7 +165,7 @@ export default function AdDetailPage() {
             <button
               onClick={generateScript}
               disabled={generating}
-              className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-500 disabled:opacity-50"
+              className="btn-holo w-full py-3 text-sm disabled:opacity-50"
             >
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               Generate AI script
@@ -202,7 +203,7 @@ export default function AdDetailPage() {
               {script.out_of_credits && (
                 <Link
                   href="/pricing"
-                  className="shrink-0 text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500"
+                  className="btn-holo shrink-0 px-4 py-2 text-sm"
                 >
                   Upgrade
                 </Link>

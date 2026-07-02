@@ -44,7 +44,7 @@ export default function AdminAuditPage() {
   if (error) return <p className="p-8 text-sm text-red-600">{error}</p>;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-8 max-w-4xl mx-auto">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">
         Admin action log ({entries.length})
       </h3>

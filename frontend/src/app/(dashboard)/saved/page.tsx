@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Bookmark, Loader2 } from "lucide-react";
+import { Bookmark } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
+import { SkeletonCard } from "@/components/ads/SkeletonCard";
 import { useSaved } from "@/components/SavedProvider";
 import { authFetch } from "@/lib/api";
 import { Ad } from "@/types";
@@ -36,7 +37,7 @@ export default function SavedPage() {
   const visible = ads.filter((a) => savedIds.has(a.id || a.ad_id));
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-8 max-w-7xl mx-auto">
       <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
         <Bookmark className="w-6 h-6" /> Saved ads
       </h2>
@@ -45,8 +46,10 @@ export default function SavedPage() {
       </p>
 
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       )}
 

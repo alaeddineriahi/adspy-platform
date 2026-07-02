@@ -478,7 +478,7 @@ export default function MediaBuyerPage() {
             </p>
             <Link
               href="/pricing"
-              className="shrink-0 text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500"
+              className="btn-holo shrink-0 px-4 py-2 text-sm"
             >
               See plans
             </Link>

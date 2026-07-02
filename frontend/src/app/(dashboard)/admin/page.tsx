@@ -51,7 +51,7 @@ export default function AdminOverviewPage() {
   const { revenue, usage, catalog } = data;
 
   return (
-    <div className="p-8 max-w-6xl space-y-8">
+    <div className="p-8 max-w-6xl mx-auto space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card
           icon={DollarSign}

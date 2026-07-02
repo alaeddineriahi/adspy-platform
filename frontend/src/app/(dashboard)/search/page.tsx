@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Search, Loader2, TrendingUp } from "lucide-react";
 import { AdCard } from "@/components/ads/AdCard";
+import { SkeletonCard } from "@/components/ads/SkeletonCard";
 import { Ad } from "@/types";
 
 type Platform = "all" | "meta" | "tiktok";
@@ -62,7 +63,7 @@ export default function SearchPage() {
   }, [platform, format, country, sort]);
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-8 max-w-7xl mx-auto">
       <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1">Search ads</h2>
       <p className="text-sm text-[#6e6e73] mb-6">Winning creatives across 6 MENA markets — longest-running and hardest-scaling first.</p>
 
@@ -135,10 +136,12 @@ export default function SearchPage() {
         </select>
       </div>
 
-      {/* Results */}
+      {/* Results — skeleton grid while loading so the layout never jumps */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       )}
 

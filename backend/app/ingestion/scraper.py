@@ -353,6 +353,7 @@ async def _fetch_graphql(sess: FBSession, country: str, search_term: str, limit:
     out: list[RawAd] = []
     cursor: Optional[str] = None
     logged = False
+    refreshed = False
 
     async with httpx.AsyncClient(timeout=45, proxy=proxy, follow_redirects=True) as client:
         for _page in range(max_pages):
@@ -378,6 +379,17 @@ async def _fetch_graphql(sess: FBSession, country: str, search_term: str, limit:
                 data = json.loads(_strip_prefix(resp.text))
             except json.JSONDecodeError:
                 logger.warning("GraphQL non-JSON for %s/'%s' (login wall / stale doc_id?).", country, search_term)
+                break
+            # Facebook rejects a stale fb_dtsg with a 200 + {error, errorSummary}
+            # envelope (e.g. 1357004) — NOT the GraphQL `errors` key. Catch it,
+            # refresh the session once, and retry the same page.
+            if isinstance(data, dict) and data.get("error") and not data.get("data"):
+                logger.warning("GraphQL FB error for %s/'%s': %s / %s",
+                               country, search_term, data.get("error"), data.get("errorSummary"))
+                if not refreshed:
+                    refreshed = True
+                    sess = await get_session(force=True) or sess
+                    continue
                 break
             nodes = _graphql_nodes(data)
             if not logged:

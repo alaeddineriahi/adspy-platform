@@ -245,6 +245,7 @@ async def get_session(force: bool = False) -> Optional[FBSession]:
         return _cache
 
     uid = ""
+    token_ts = 0.0  # when the current dtsg/lsd were minted (0 = unknown → refresh)
 
     # 1) manual env override
     env_cookie = (getattr(settings, "META_FB_COOKIE", "") or "").strip()
@@ -263,13 +264,19 @@ async def get_session(force: bool = False) -> Optional[FBSession]:
         if disk and disk.cookie:
             cookie, source = disk.cookie, "disk"
             dtsg, lsd, uid = disk.fb_dtsg, disk.lsd, disk.user_id
+            token_ts = disk.ts
         else:
             _cache = None
             return None
 
-    if not dtsg:
-        dtsg, lsd2, uid2 = await _bootstrap_tokens(cookie)
-        lsd, uid = (lsd or lsd2), (uid2 or uid)
+    # Refresh page tokens when missing OR stale. fb_dtsg rotates; a stale one makes
+    # FB reject the GraphQL call with error 1357004 and the scrape silently returns
+    # 0 ads. (Previously we only bootstrapped when dtsg was absent, so a stale
+    # on-disk token was reused forever.)
+    if not dtsg or (time.time() - token_ts) > TOKEN_TTL:
+        dtsg2, lsd2, uid2 = await _bootstrap_tokens(cookie)
+        if dtsg2:
+            dtsg, lsd, uid = dtsg2, (lsd2 or lsd), (uid2 or uid)
 
     sess = FBSession(cookie=cookie, fb_dtsg=dtsg, lsd=lsd, user_id=uid, source=source, ts=time.time())
     _cache = sess

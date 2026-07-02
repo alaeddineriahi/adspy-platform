@@ -63,7 +63,8 @@ export default function SearchPage() {
 
   return (
     <div className="p-8 max-w-7xl">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Search ads</h2>
+      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1">Search ads</h2>
+      <p className="text-sm text-[#6e6e73] mb-6">Winning creatives across 6 MENA markets — longest-running and hardest-scaling first.</p>
 
       {/* Search bar */}
       <form onSubmit={handleSubmit} className="relative mb-6">
@@ -73,12 +74,12 @@ export default function SearchPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by keyword, brand, or domain..."
-          className="w-full pl-12 pr-28 py-3.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full pl-12 pr-28 py-3.5 bg-white border border-[#e6e6e7] rounded-full text-sm focus:outline-none focus:border-[#1d1d1f] transition"
         />
         <button
           type="submit"
           disabled={loading}
-          className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
+          className="btn-holo absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 text-sm disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           Search
@@ -90,7 +91,7 @@ export default function SearchPage() {
         <select
           value={platform}
           onChange={(e) => setPlatform(e.target.value as Platform)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white cursor-pointer"
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
         >
           <option value="all">All platforms</option>
           <option value="meta">Meta (FB + IG)</option>
@@ -100,7 +101,7 @@ export default function SearchPage() {
         <select
           value={format}
           onChange={(e) => setFormat(e.target.value as AdFormat)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white cursor-pointer"
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
         >
           <option value="all">All formats</option>
           <option value="image">Image</option>
@@ -111,7 +112,7 @@ export default function SearchPage() {
         <select
           value={country}
           onChange={(e) => setCountry(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white cursor-pointer"
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
         >
           <option value="all">All countries</option>
           <option value="TN">Tunisia</option>
@@ -125,7 +126,7 @@ export default function SearchPage() {
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as SortBy)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white cursor-pointer"
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
         >
           <option value="best_performing">Top performing</option>
           <option value="newest">Newest first</option>

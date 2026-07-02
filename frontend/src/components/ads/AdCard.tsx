@@ -21,7 +21,7 @@ export function AdCard({ ad }: { ad: Ad }) {
   const saved = isSaved(savedId);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition group">
+    <div className="bg-white rounded-2xl border border-[#e6e6e7] overflow-hidden hover:shadow-lg hover:shadow-gray-200/70 hover:-translate-y-0.5 transition-all duration-200 group">
       {/* Media preview */}
       <div className="aspect-video bg-gray-100 relative flex items-center justify-center">
         {thumb && imgOk ? (
@@ -36,7 +36,7 @@ export function AdCard({ ad }: { ad: Ad }) {
           <ImageOff className="w-8 h-8 text-gray-300" />
         )}
         <span
-          className={`absolute top-3 left-3 px-2 py-1 rounded-md text-xs font-medium ${
+          className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold ${
             platformColors[ad.platform] ?? "bg-gray-100 text-gray-700"
           }`}
         >
@@ -49,9 +49,9 @@ export function AdCard({ ad }: { ad: Ad }) {
             toggle(savedId);
           }}
           title={saved ? "Remove from saved" : "Save to swipe file"}
-          className={`absolute top-3 right-3 p-2 rounded-lg transition ${
+          className={`absolute top-3 right-3 p-2 rounded-full transition ${
             saved
-              ? "bg-gray-900 text-white opacity-100"
+              ? "bg-[#1d1d1f] text-white opacity-100"
               : "bg-white/90 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white"
           }`}
         >
@@ -59,7 +59,7 @@ export function AdCard({ ad }: { ad: Ad }) {
         </button>
         {typeof ad.performance_score === "number" && (
           <span
-            className="absolute bottom-3 left-3 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-emerald-500/90 text-white"
+            className="absolute bottom-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold holo-gradient text-white shadow-sm"
             title="Money score (0–100): scaling + longevity + commerce"
           >
             <TrendingUp className="w-3 h-3" />
@@ -101,14 +101,14 @@ export function AdCard({ ad }: { ad: Ad }) {
       <div className="px-4 pb-4 flex gap-2">
         <Link
           href={`/ad/${ad.id || ad.ad_id}`}
-          className="flex-1 text-center py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+          className="flex-1 text-center py-2 text-sm font-semibold bg-[#1d1d1f] text-white rounded-full hover:bg-black transition"
         >
           View details
         </Link>
         <Link
           href={`/mediabuyer?ad=${ad.id || ad.ad_id}`}
           title="Plan a campaign with the media buyer"
-          className="flex items-center justify-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+          className="flex items-center justify-center w-9 h-9 border border-[#e6e6e7] rounded-full hover:border-[#1d1d1f] transition"
         >
           <Megaphone className="w-4 h-4 text-gray-600" />
         </Link>
@@ -117,7 +117,7 @@ export function AdCard({ ad }: { ad: Ad }) {
             href={ad.landing_page}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="flex items-center justify-center w-9 h-9 border border-[#e6e6e7] rounded-full hover:border-[#1d1d1f] transition"
           >
             <ExternalLink className="w-4 h-4 text-gray-600" />
           </a>

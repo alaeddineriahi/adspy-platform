@@ -108,12 +108,15 @@ export default function PricingPage() {
             return (
               <div
                 key={p.id}
-                className={`relative bg-white rounded-2xl p-6 flex flex-col border ${
-                  highlight ? "border-blue-600 shadow-lg shadow-blue-100" : "border-gray-200"
+                className={`relative rounded-2xl ${highlight ? "holo-ring shadow-lg shadow-gray-200/80" : ""}`}
+              >
+              <div
+                className={`relative bg-white p-6 flex flex-col h-full ${
+                  highlight ? "rounded-[15px]" : "rounded-2xl border border-[#e6e6e7]"
                 }`}
               >
                 {highlight && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-semibold bg-blue-600 text-white px-3 py-1 rounded-full flex items-center gap-1">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-bold holo-gradient text-white px-3 py-1 rounded-full flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Most popular
                   </span>
                 )}
@@ -138,14 +141,14 @@ export default function PricingPage() {
                 {p.id === "free" ? (
                   <button
                     disabled
-                    className="w-full py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-400"
+                    className="w-full py-2.5 rounded-full text-sm font-medium border border-[#e6e6e7] text-gray-400"
                   >
                     {isCurrent ? "Your current plan" : "Included"}
                   </button>
                 ) : isCurrent ? (
                   <button
                     disabled
-                    className="w-full py-2.5 rounded-xl text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    className="w-full py-2.5 rounded-full text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
                   >
                     ✓ Your current plan
                   </button>
@@ -153,11 +156,7 @@ export default function PricingPage() {
                   <button
                     onClick={() => subscribe(p.id)}
                     disabled={paying !== null}
-                    className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 ${
-                      highlight
-                        ? "bg-blue-600 text-white hover:bg-blue-500"
-                        : "bg-gray-900 text-white hover:bg-gray-800"
-                    }`}
+                    className="btn-holo w-full py-2.5 text-sm disabled:opacity-60"
                   >
                     {paying === p.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -166,6 +165,7 @@ export default function PricingPage() {
                     )}
                   </button>
                 )}
+              </div>
               </div>
             );
           })}

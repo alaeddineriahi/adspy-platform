@@ -422,7 +422,7 @@ export default function MediaBuyerPage() {
         <div className="max-w-3xl mx-auto">
           {empty ? (
             <div className="text-center py-12">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-gray-900 flex items-center justify-center mb-4">
+              <div className="w-14 h-14 mx-auto rounded-2xl holo-gradient flex items-center justify-center mb-4">
                 <Megaphone className="w-7 h-7 text-white" />
               </div>
               <p className="text-lg font-medium text-gray-900">Ask your media buyer anything</p>
@@ -491,12 +491,12 @@ export default function MediaBuyerPage() {
             onKeyDown={onKeyDown}
             rows={1}
             placeholder="Ask about budgets, targeting, scaling…  (Enter to send, Shift+Enter for newline)"
-            className="flex-1 resize-none max-h-40 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 resize-none max-h-40 px-5 py-3 bg-white border border-[#e6e6e7] rounded-3xl text-sm focus:outline-none focus:border-[#1d1d1f] transition"
           />
           <button
             onClick={() => send(input)}
             disabled={streaming || !input.trim()}
-            className="shrink-0 flex items-center justify-center w-11 h-11 bg-gray-900 text-white rounded-xl hover:bg-gray-800 disabled:opacity-40"
+            className="btn-holo shrink-0 w-11 h-11 disabled:opacity-40"
           >
             {streaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </button>

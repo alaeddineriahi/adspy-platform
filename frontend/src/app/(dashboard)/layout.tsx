@@ -1,48 +1,26 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard } from "lucide-react";
 import { SavedProvider } from "@/components/SavedProvider";
 import { UsageProvider } from "@/components/UsageProvider";
 import { CreditMeter } from "@/components/CreditMeter";
 import { AdminProvider } from "@/components/AdminProvider";
-import { AdminNavLink } from "@/components/AdminNavLink";
-
-const navItems = [
-  { href: "/search", label: "Search", icon: Search },
-  { href: "/brands", label: "Brand Spy", icon: Eye },
-  { href: "/mediabuyer", label: "Media Buyer", icon: Megaphone },
-  { href: "/ai", label: "AI Tools", icon: Zap },
-  { href: "/saved", label: "Saved", icon: Bookmark },
-  { href: "/pricing", label: "Pricing", icon: CreditCard },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+import { SideNav } from "@/components/SideNav";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AdminProvider>
       <UsageProvider>
-        <div className="flex h-screen bg-gray-50">
-          <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div className="flex h-screen bg-[#fbfbfb]">
+          <aside className="w-64 bg-white border-r border-[#e6e6e7] flex flex-col">
             <div className="p-6">
-              <Link href="/search" className="text-xl font-bold text-gray-900">
-                AdSpy
+              <Link href="/search" className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full holo-gradient" />
+                <span className="text-xl font-black tracking-tight text-[#1d1d1f]">AdSpy</span>
               </Link>
             </div>
-            <nav className="flex-1 px-3">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 rounded-lg hover:bg-gray-100 mb-1"
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
-                </Link>
-              ))}
-              <AdminNavLink />
-            </nav>
+            <SideNav />
             <CreditMeter />
-            <div className="p-4 border-t border-gray-200">
+            <div className="p-4 border-t border-[#e6e6e7]">
               <UserButton afterSignOutUrl="/" />
             </div>
           </aside>

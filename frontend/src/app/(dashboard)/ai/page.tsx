@@ -157,7 +157,7 @@ export default function AIToolsPage() {
         <button
           type="submit"
           disabled={loading}
-          className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-500 disabled:opacity-50"
+          className="btn-holo w-full py-3 text-sm disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           {loading ? "Writing your script..." : "Generate video script"}

@@ -11,6 +11,9 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        ink: "#1d1d1f",
+        muted: "#6e6e73",
+        hairline: "#e6e6e7",
       },
     },
   },

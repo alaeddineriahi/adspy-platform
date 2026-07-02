@@ -1,6 +1,6 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard, ShieldCheck } from "lucide-react";
+import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard } from "lucide-react";
 import { SavedProvider } from "@/components/SavedProvider";
 import { UsageProvider } from "@/components/UsageProvider";
 import { CreditMeter } from "@/components/CreditMeter";
@@ -39,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {item.label}
                 </Link>
               ))}
-              <AdminNavLink icon={ShieldCheck} />
+              <AdminNavLink />
             </nav>
             <CreditMeter />
             <div className="p-4 border-t border-gray-200">

@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3
     INGEST_MAX_PER_COUNTRY: int = 40
+    # An ad not re-seen by any sweep for this many days is marked inactive —
+    # keeps "active/longest-running" honest instead of frozen at scrape time.
+    INGEST_STALE_DAYS: int = 14
 
     # --- Storage (Cloudflare R2) ---
     R2_ACCOUNT_ID: str = ""

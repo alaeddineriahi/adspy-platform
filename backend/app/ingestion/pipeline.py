@@ -43,7 +43,13 @@ _FRENCH_RE = re.compile(
 )
 
 # Lightweight run status, surfaced by the /status endpoint.
-LAST_RUN: dict = {"status": "never_run", "started_at": None, "finished_at": None, "stats": None}
+LAST_RUN: dict = {
+    "status": "never_run",
+    "started_at": None,
+    "finished_at": None,
+    "stats": None,
+    "alert": None,  # actionable warning (e.g. dead Facebook session) shown in the UI
+}
 
 
 def _as_list(value, default: list[str]) -> list[str]:
@@ -152,8 +158,32 @@ async def ingest_best_performing(
     search_terms = list(search_terms) if search_terms else _as_list(getattr(settings, "INGEST_SEARCH_TERMS", None), DEFAULT_SEARCH_TERMS)
     max_per_country = max_per_country or int(getattr(settings, "INGEST_MAX_PER_COUNTRY", 40))
 
-    LAST_RUN.update(status="running", started_at=datetime.now(timezone.utc).isoformat(), finished_at=None)
+    # Clear the previous run's stats/alert so mid-run polling never shows stale data.
+    LAST_RUN.update(
+        status="running",
+        started_at=datetime.now(timezone.utc).isoformat(),
+        finished_at=None,
+        stats=None,
+        alert=None,
+    )
+    try:
+        return await _run_sweep(countries, search_terms, limit_per_query, max_per_country)
+    except Exception as e:
+        # Without this, a crash leaves status stuck on "running" forever.
+        LAST_RUN.update(
+            status="error",
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            alert=f"Sweep crashed: {e}",
+        )
+        raise
 
+
+async def _run_sweep(
+    countries: list[str],
+    search_terms: list[str],
+    limit_per_query: int,
+    max_per_country: int,
+) -> dict:
     # 1) Scrape every (country, term). Dedup by ad_id as we go.
     by_id: dict[str, RawAd] = {}
     fetched = 0
@@ -217,6 +247,7 @@ async def ingest_best_performing(
     docs = await asyncio.gather(*[_build_doc(ad, s) for ad, s in final])
 
     indexed = 0
+    marked_inactive = 0
     es = get_es_client()
     try:
         await setup_index(es)
@@ -225,6 +256,31 @@ async def ingest_best_performing(
             indexed += 1
         if indexed:
             await es.indices.refresh(index="ads")
+
+        # 6) Freshness pass: re-indexed ads got a new indexed_at above; anything
+        # still-active that no sweep has re-seen in INGEST_STALE_DAYS is
+        # presumed dead and flipped inactive, so "active"/"longest running"
+        # stays honest instead of frozen at first-scrape time.
+        stale_days = int(getattr(settings, "INGEST_STALE_DAYS", 14))
+        try:
+            resp = await es.update_by_query(
+                index="ads",
+                body={
+                    "conflicts": "proceed",
+                    "query": {"bool": {"filter": [
+                        {"term": {"is_active": True}},
+                        {"range": {"indexed_at": {"lt": f"now-{stale_days}d"}}},
+                    ]}},
+                    "script": {"source": "ctx._source.is_active = false"},
+                },
+                refresh=True,
+            )
+            marked_inactive = int(resp.get("updated", 0))
+            if marked_inactive:
+                logger.info("Freshness pass: marked %s stale ads inactive (>%sd unseen).",
+                            marked_inactive, stale_days)
+        except Exception as e:  # noqa: BLE001 — freshness is best-effort, never fail the sweep
+            logger.warning("Freshness pass failed: %s", e)
     finally:
         await es.close()
 
@@ -235,6 +291,7 @@ async def ingest_best_performing(
         "dropped_spam": dropped_spam,
         "dropped_low_perf": dropped_low_perf,
         "indexed": indexed,
+        "marked_inactive": marked_inactive,
         "per_country": per_country_count,
         "top": [
             {"advertiser": ad.page_name, "country": ad.country,
@@ -242,6 +299,24 @@ async def ingest_best_performing(
             for ad, s in final[:10]
         ],
     }
-    LAST_RUN.update(status="ok", finished_at=datetime.now(timezone.utc).isoformat(), stats=stats)
-    logger.info("Ingestion sweep done: %s", {k: stats[k] for k in ("fetched", "unique", "kept", "indexed")})
+
+    # Dead-session detection: HTTP succeeded but zero ads across the whole sweep
+    # almost always means the cookie/tokens died (FB returns empty or an error
+    # envelope). Surface it loudly instead of letting the catalog rot silently.
+    alert = None
+    if fetched == 0 and countries and search_terms:
+        alert = (
+            "Sweep fetched 0 ads across "
+            f"{len(countries) * len(search_terms)} queries — the Facebook session is "
+            "likely dead or expired. Open the Ingestion page and paste a fresh cookie."
+        )
+        logger.warning(alert)
+
+    LAST_RUN.update(
+        status="ok",
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        stats=stats,
+        alert=alert,
+    )
+    logger.info("Ingestion sweep done: %s", {k: stats[k] for k in ("fetched", "unique", "kept", "indexed", "marked_inactive")})
     return stats

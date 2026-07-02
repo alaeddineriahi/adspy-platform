@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Download, Loader2, Play, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { Download, Loader2, Play, CheckCircle2, XCircle, RefreshCw, AlertTriangle } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -37,6 +37,7 @@ interface Stats {
   dropped_spam: number;
   dropped_low_perf: number;
   indexed: number;
+  marked_inactive?: number;
   per_country: Record<string, number>;
   top: TopAd[];
 }
@@ -44,7 +45,13 @@ interface Status {
   scraping_configured: boolean;
   session: SessionInfo;
   template_captured?: boolean;
-  last_run: { status: string; started_at: string | null; finished_at: string | null; stats: Stats | null };
+  last_run: {
+    status: string;
+    started_at: string | null;
+    finished_at: string | null;
+    stats: Stats | null;
+    alert?: string | null;
+  };
 }
 
 export default function IngestionPage() {
@@ -186,6 +193,17 @@ export default function IngestionPage() {
         Pull the best-performing e-commerce ads from Meta&apos;s Ad Library —
         long-running and scaling winners only, spam filtered out.
       </p>
+
+      {/* Dead-session / sweep alert */}
+      {status?.last_run.alert && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-red-800">Ingestion needs attention</p>
+            <p className="text-sm text-red-700 mt-0.5">{status.last_run.alert}</p>
+          </div>
+        </div>
+      )}
 
       {/* Session status */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
@@ -355,13 +373,14 @@ export default function IngestionPage() {
 
           {stats ? (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-6">
                 <Stat label="Fetched" value={stats.fetched} />
                 <Stat label="Unique" value={stats.unique} />
                 <Stat label="Kept" value={stats.kept} highlight />
                 <Stat label="Spam cut" value={stats.dropped_spam} />
                 <Stat label="Low-perf cut" value={stats.dropped_low_perf} />
                 <Stat label="Indexed" value={stats.indexed} highlight />
+                <Stat label="Gone stale" value={stats.marked_inactive ?? 0} />
               </div>
 
               {stats.top.length > 0 && (

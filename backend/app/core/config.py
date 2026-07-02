@@ -2,8 +2,16 @@
 App configuration — loads from .env file.
 """
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 from typing import Optional
+
+# Anchor .env to the backend/ directory so settings load identically no matter
+# which cwd uvicorn was launched from (a relative ".env" silently loads nothing
+# when started elsewhere — which would disable auth's Clerk config, the DB URL,
+# ingestion settings... everything).
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -91,7 +99,7 @@ class Settings(BaseSettings):
     FLOUCI_APP_SECRET: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = _ENV_FILE
         extra = "allow"
 
 

@@ -17,6 +17,7 @@ from typing import Optional
 from sqlalchemy import select
 
 from app.core.auth import get_user_id
+from app.core.config import settings
 from app.core.credits import PLAN_CREDITS, activate_subscription
 from app.core.database import async_session
 from app.models.billing import PaymentIntent
@@ -73,6 +74,12 @@ async def create_subscription(req: SubscribeRequest, uid: str = Depends(get_user
     """Create a payment link for a subscription plan (requires a signed-in user)."""
     if req.plan not in PLAN_PRICES:
         raise HTTPException(400, f"Invalid plan. Choose: {list(PLAN_PRICES.keys())}")
+
+    # Fail with a clear message while gateway keys aren't set up yet.
+    if req.payment_method == "flouci" and not settings.FLOUCI_APP_TOKEN:
+        raise HTTPException(503, "Flouci isn't configured yet — payments open soon.")
+    if req.payment_method != "flouci" and not settings.KONNECT_API_KEY:
+        raise HTTPException(503, "Payments aren't live yet — Konnect keys pending. Check back soon.")
 
     amount = PLAN_PRICES[req.plan]
 

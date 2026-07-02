@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Zap, Loader2, Film, Copy, CheckCheck } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { authFetch, apiError } from "@/lib/api";
+import { useUsage } from "@/components/UsageProvider";
 
 interface Hook {
   type: string;
@@ -28,6 +30,8 @@ interface VideoScript {
 
 export default function AIToolsPage() {
   const { getToken } = useAuth();
+  const { refresh: refreshUsage } = useUsage();
+  const [outOfCredits, setOutOfCredits] = useState(false);
   const [product, setProduct] = useState("");
   const [audience, setAudience] = useState("");
   const [platform, setPlatform] = useState("tiktok");
@@ -43,6 +47,7 @@ export default function AIToolsPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setOutOfCredits(false);
     setScript(null);
     try {
       const res = await authFetch(getToken, "/api/ai/generate-video-script", {
@@ -50,8 +55,10 @@ export default function AIToolsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product, audience, platform, language, duration, tone }),
       });
+      if (res.status === 402) setOutOfCredits(true);
       if (!res.ok) throw new Error(await apiError(res));
       setScript(await res.json());
+      refreshUsage(); // keep the sidebar credit meter honest
     } catch (err: any) {
       setError(err.message || "Generation failed");
     } finally {
@@ -157,7 +164,19 @@ export default function AIToolsPage() {
         </button>
       </form>
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="mt-4 flex items-center justify-between gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          <p className="text-sm text-red-700">{error}</p>
+          {outOfCredits && (
+            <Link
+              href="/pricing"
+              className="shrink-0 text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500"
+            >
+              Upgrade
+            </Link>
+          )}
+        </div>
+      )}
 
       {script && (
         <div className="mt-6 space-y-6">

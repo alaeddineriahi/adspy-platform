@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Megaphone, Send, Loader2, Sparkles, RotateCcw, SlidersHorizontal, Check } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { authFetch, apiError, API_URL } from "@/lib/api";
+import { useUsage } from "@/components/UsageProvider";
 
 const PROFILE_KEY = "adspy_buyer_profile";
 const CHAT_KEY = "adspy_buyer_chat";
@@ -129,9 +131,11 @@ function profileSummary(p: Profile): string {
 
 export default function MediaBuyerPage() {
   const { getToken } = useAuth();
+  const { refresh: refreshUsage } = useUsage();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [outOfCredits, setOutOfCredits] = useState(false);
   const [adId, setAdId] = useState<string | null>(null);
   const [adLabel, setAdLabel] = useState<string>("");
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
@@ -209,12 +213,14 @@ export default function MediaBuyerPage() {
       setMessages([...history, { role: "assistant", content: "" }]);
       setInput("");
       setStreaming(true);
+      setOutOfCredits(false);
       try {
         const res = await authFetch(getToken, "/api/mediabuyer/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: history, ad_id: adId, profile: cleanProfile(profile) }),
         });
+        if (res.status === 402) setOutOfCredits(true);
         if (!res.ok || !res.body) throw new Error(await apiError(res));
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -229,6 +235,7 @@ export default function MediaBuyerPage() {
             return next;
           });
         }
+        refreshUsage(); // sidebar meter reflects the credit just spent
       } catch (err: any) {
         setMessages((prev) => {
           const next = [...prev];
@@ -242,7 +249,7 @@ export default function MediaBuyerPage() {
         setStreaming(false);
       }
     },
-    [messages, streaming, adId, profile, getToken]
+    [messages, streaming, adId, profile, getToken, refreshUsage]
   );
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -464,6 +471,19 @@ export default function MediaBuyerPage() {
 
       {/* Composer */}
       <div className="border-t border-gray-200 bg-white px-8 py-4">
+        {outOfCredits && (
+          <div className="max-w-3xl mx-auto mb-3 flex items-center justify-between gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+            <p className="text-sm text-blue-900">
+              You're out of AI credits this month — upgrade to keep the conversation going.
+            </p>
+            <Link
+              href="/pricing"
+              className="shrink-0 text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500"
+            >
+              See plans
+            </Link>
+          </div>
+        )}
         <div className="max-w-3xl mx-auto flex items-end gap-3">
           <textarea
             value={input}

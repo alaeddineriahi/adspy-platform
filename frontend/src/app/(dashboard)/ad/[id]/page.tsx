@@ -9,11 +9,13 @@ import {
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { authFetch, apiError, API_URL } from "@/lib/api";
+import { useUsage } from "@/components/UsageProvider";
 import { Ad } from "@/types";
 
 export default function AdDetailPage() {
   const { id } = useParams();
   const { getToken } = useAuth();
+  const { refresh: refreshUsage } = useUsage();
   const [ad, setAd] = useState<Ad | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -44,8 +46,12 @@ export default function AdDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ad_id: id, language: ad?.language || "en" }),
       });
-      if (!res.ok) throw new Error(await apiError(res));
+      if (!res.ok) {
+        setScript({ error: await apiError(res), out_of_credits: res.status === 402 });
+        return;
+      }
       setScript(await res.json());
+      refreshUsage();
     } catch (err: any) {
       setScript({ error: err.message || "Generation failed" });
     } finally {
@@ -177,7 +183,19 @@ export default function AdDetailPage() {
             <Zap className="w-5 h-5 text-blue-600" /> AI-generated script
           </h3>
 
-          {script.error && <p className="text-sm text-red-600">{script.error}</p>}
+          {script.error && (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-red-600">{script.error}</p>
+              {script.out_of_credits && (
+                <Link
+                  href="/pricing"
+                  className="shrink-0 text-sm font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500"
+                >
+                  Upgrade
+                </Link>
+              )}
+            </div>
+          )}
 
           {script.analysis && (
             <div className="bg-blue-50 rounded-lg p-4 mb-6">

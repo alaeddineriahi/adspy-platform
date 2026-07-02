@@ -232,16 +232,24 @@ async def _run_sweep(
 
     async def _build_doc(ad: RawAd, s) -> dict:
         doc = _to_doc(ad, s)
-        src = ad.images[0] if ad.images else None
-        if src and r2_enabled():
+        # Try up to 3 image candidates — the first can be hotlink-blocked or a
+        # dead variant while the second mirrors fine.
+        candidates = [u for u in ad.images[:3] if u]
+        if candidates and r2_enabled():
             async with sem:
-                # key prefix "media/" (NOT "ads/") — ad blockers block /ads/ image URLs too
-                r2_url = await mirror_to_r2(src, f"media/{ad.ad_id}.jpg")
-            if r2_url:
-                doc["media_urls"] = [r2_url] + [u for u in doc["media_urls"] if u != src]
-                doc["thumbnail"] = r2_url
-        elif src:
-            doc["thumbnail"] = src
+                for src in candidates:
+                    # key prefix "media/" (NOT "ads/") — ad blockers block /ads/ URLs too
+                    r2_url = await mirror_to_r2(src, f"media/{ad.ad_id}.jpg")
+                    if r2_url:
+                        doc["media_urls"] = [r2_url] + [u for u in doc["media_urls"] if u != src]
+                        doc["thumbnail"] = r2_url
+                        break
+            if "thumbnail" not in doc:
+                # Mirror failed everywhere — a fresh signed FB URL still renders
+                # for days; strictly better than shipping no thumbnail at all.
+                doc["thumbnail"] = candidates[0]
+        elif candidates:
+            doc["thumbnail"] = candidates[0]
         return doc
 
     docs = await asyncio.gather(*[_build_doc(ad, s) for ad, s in final])

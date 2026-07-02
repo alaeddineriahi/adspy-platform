@@ -1,10 +1,41 @@
 "use client";
 
 import { Ad } from "@/types";
-import { Bookmark, ExternalLink, Clock, Globe, ImageOff, Layers, TrendingUp, Megaphone } from "lucide-react";
+import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useSaved } from "@/components/SavedProvider";
+
+// Deterministic gradient pair per advertiser so the placeholder looks branded,
+// not broken — same brand always gets the same colors.
+const GRADIENTS: [string, string][] = [
+  ["#3e86c6", "#a666aa"],
+  ["#a666aa", "#ec4492"],
+  ["#ec4492", "#ee4454"],
+  ["#ee4454", "#f05427"],
+  ["#f05427", "#3e86c6"],
+  ["#3e86c6", "#ec4492"],
+];
+
+function BrandPlaceholder({ name, format }: { name: string; format?: string }) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  const [from, to] = GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+  return (
+    <div
+      className="w-full h-full flex flex-col items-center justify-center gap-2"
+      style={{ background: `linear-gradient(135deg, ${from}26, ${to}40)` }}
+    >
+      <span
+        className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow-sm"
+        style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+      >
+        {format === "video" ? <Play className="w-6 h-6 fill-current" /> : name.charAt(0).toUpperCase()}
+      </span>
+      <span className="text-xs font-semibold text-[#1d1d1f]/60 max-w-[80%] truncate">{name}</span>
+    </div>
+  );
+}
 
 export function AdCard({ ad }: { ad: Ad }) {
   const platformColors: Record<string, string> = {
@@ -33,7 +64,7 @@ export function AdCard({ ad }: { ad: Ad }) {
             onError={() => setImgOk(false)}
           />
         ) : (
-          <ImageOff className="w-8 h-8 text-gray-300" />
+          <BrandPlaceholder name={ad.advertiser_name || "Ad"} format={ad.ad_format} />
         )}
         <span
           className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold ${

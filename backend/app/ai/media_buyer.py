@@ -95,6 +95,7 @@ Ads Manager themselves. Never claim you launched or changed a live campaign."""
 _CURRENCY_BY_COUNTRY = {
     "TN": "TND", "MA": "MAD", "DZ": "DZD", "EG": "EGP",
     "SA": "SAR", "AE": "AED", "KW": "KWD", "QA": "QAR",
+    "US": "USD", "CA": "CAD", "GB": "GBP", "AU": "AUD", "FR": "EUR",
     "Tunisia": "TND", "Morocco": "MAD", "Algeria": "DZD", "Egypt": "EGP",
     "Saudi Arabia": "SAR", "UAE": "AED", "Kuwait": "KWD", "Qatar": "QAR",
 }

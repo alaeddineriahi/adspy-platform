@@ -132,12 +132,23 @@ export default function SearchPage() {
           className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
         >
           <option value="all">All countries</option>
-          <option value="TN">Tunisia</option>
-          <option value="DZ">Algeria</option>
-          <option value="MA">Morocco</option>
-          <option value="EG">Egypt</option>
-          <option value="SA">Saudi Arabia</option>
-          <option value="AE">UAE</option>
+          <optgroup label="Your markets">
+            <option value="TN">Tunisia</option>
+            <option value="DZ">Algeria</option>
+            <option value="MA">Morocco</option>
+            <option value="EG">Egypt</option>
+            <option value="SA">Saudi Arabia</option>
+            <option value="AE">UAE</option>
+            <option value="KW">Kuwait</option>
+            <option value="QA">Qatar</option>
+          </optgroup>
+          <optgroup label="🌍 Global trends">
+            <option value="US">USA</option>
+            <option value="CA">Canada</option>
+            <option value="GB">UK</option>
+            <option value="AU">Australia</option>
+            <option value="FR">France</option>
+          </optgroup>
         </select>
 
         <select

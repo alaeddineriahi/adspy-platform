@@ -21,12 +21,17 @@ from app.ingestion.media import mirror_to_r2, r2_enabled
 
 logger = logging.getLogger("adspy.ingest")
 
-DEFAULT_COUNTRIES = ["TN", "MA", "DZ", "EG", "SA", "AE"]
+# Core markets — the user's region, swept every INGEST_INTERVAL_HOURS.
+DEFAULT_COUNTRIES = ["TN", "MA", "DZ", "EG", "SA", "AE", "KW", "QA"]
+# Trend markets — where e-com trends originate; what scales there reaches MENA
+# months later. Swept separately (INGEST_GLOBAL_*) at a lighter cadence.
+GLOBAL_COUNTRIES = ["US", "CA", "GB", "AU", "FR"]
+
 # Discovery is about finding WINNING PRODUCTS, not matching discount words — and
 # not the app/game/marketplace noise that a blank "browse everything" pulls in.
-# So we sweep broad PRODUCT CATEGORIES across niches (FR + AR); searching a
-# category structurally excludes games/apps, and the winner-scoring (longevity +
-# scaling + e-commerce, global marketplaces filtered) surfaces the winners.
+# So we sweep broad PRODUCT CATEGORIES across niches; searching a category
+# structurally excludes games/apps, and the winner-scoring (longevity + scaling
+# + e-commerce, global marketplaces filtered) surfaces the winners.
 # Want the raw firehose? Pass "" as a search term in the UI. Want a niche? Type it.
 DEFAULT_SEARCH_TERMS = [
     "cosmétique", "sérum", "crème", "parfum",   # beauty / skincare
@@ -35,6 +40,31 @@ DEFAULT_SEARCH_TERMS = [
     "cuisine", "gadget", "bébé",                # home / gadgets / kids
     "سيروم", "عطر", "كريم", "عناية",            # AR: serum / perfume / cream / care
 ]
+# English category terms for the EN trend markets (US/CA/GB/AU).
+EN_SEARCH_TERMS = [
+    "serum", "skincare", "perfume", "cream",
+    "watch", "sunglasses", "sneakers", "bag",
+    "supplement", "hair growth", "posture",
+    "kitchen gadget", "cleaning", "baby",
+]
+# French-only terms for France (the AR half is noise there).
+FR_SEARCH_TERMS = [
+    "cosmétique", "sérum", "crème", "parfum",
+    "montre", "lunettes", "chaussures", "sac",
+    "complément", "minceur", "cheveux",
+    "cuisine", "gadget", "bébé",
+]
+
+_EN_MARKETS = {"US", "CA", "GB", "AU"}
+
+
+def default_terms_for(country: str) -> list[str]:
+    """Per-market category terms — English for EN markets, no Arabic in France."""
+    if country in _EN_MARKETS:
+        return EN_SEARCH_TERMS
+    if country == "FR":
+        return FR_SEARCH_TERMS
+    return _as_list(getattr(settings, "INGEST_SEARCH_TERMS", None), DEFAULT_SEARCH_TERMS)
 
 _ARABIC_RE = re.compile(r"[؀-ۿ]")
 _FRENCH_RE = re.compile(
@@ -155,42 +185,56 @@ async def ingest_best_performing(
     indexed, per_country, top}.
     """
     countries = list(countries) if countries else _as_list(getattr(settings, "INGEST_COUNTRIES", None), DEFAULT_COUNTRIES)
-    search_terms = list(search_terms) if search_terms else _as_list(getattr(settings, "INGEST_SEARCH_TERMS", None), DEFAULT_SEARCH_TERMS)
+    # Explicit terms (API/env) override for ALL countries; otherwise each
+    # country gets its own language-appropriate category set.
+    explicit_terms = (
+        list(search_terms) if search_terms
+        else (_as_list(getattr(settings, "INGEST_SEARCH_TERMS", None), []) or None)
+    )
     max_per_country = max_per_country or int(getattr(settings, "INGEST_MAX_PER_COUNTRY", 40))
 
-    # Clear the previous run's stats/alert so mid-run polling never shows stale data.
-    LAST_RUN.update(
-        status="running",
-        started_at=datetime.now(timezone.utc).isoformat(),
-        finished_at=None,
-        stats=None,
-        alert=None,
-    )
-    try:
-        return await _run_sweep(countries, search_terms, limit_per_query, max_per_country)
-    except Exception as e:
-        # Without this, a crash leaves status stuck on "running" forever.
+    # One sweep at a time — the core and global scheduler jobs (and manual
+    # triggers) share the same FB session and the same LAST_RUN slot.
+    async with _SWEEP_LOCK:
+        # Clear the previous run's stats/alert so mid-run polling never shows stale data.
         LAST_RUN.update(
-            status="error",
-            finished_at=datetime.now(timezone.utc).isoformat(),
-            alert=f"Sweep crashed: {e}",
+            status="running",
+            started_at=datetime.now(timezone.utc).isoformat(),
+            finished_at=None,
+            stats=None,
+            alert=None,
         )
-        raise
+        try:
+            return await _run_sweep(countries, explicit_terms, limit_per_query, max_per_country)
+        except Exception as e:
+            # Without this, a crash leaves status stuck on "running" forever.
+            LAST_RUN.update(
+                status="error",
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                alert=f"Sweep crashed: {e}",
+            )
+            raise
+
+
+_SWEEP_LOCK = asyncio.Lock()
 
 
 async def _run_sweep(
     countries: list[str],
-    search_terms: list[str],
+    explicit_terms: Optional[list[str]],
     limit_per_query: int,
     max_per_country: int,
 ) -> dict:
     # 1) Scrape every (country, term). Dedup by ad_id as we go.
     by_id: dict[str, RawAd] = {}
     fetched = 0
+    queries = 0
     for country in countries:
-        for term in search_terms:
+        terms = explicit_terms if explicit_terms else default_terms_for(country)
+        for term in terms:
             ads = await fetch_ads(country=country, search_term=term, limit=limit_per_query)
             fetched += len(ads)
+            queries += 1
             for ad in ads:
                 by_id.setdefault(ad.ad_id, ad)
             await asyncio.sleep(0.5)  # gentle pacing between queries
@@ -312,10 +356,9 @@ async def _run_sweep(
     # almost always means the cookie/tokens died (FB returns empty or an error
     # envelope). Surface it loudly instead of letting the catalog rot silently.
     alert = None
-    if fetched == 0 and countries and search_terms:
+    if fetched == 0 and queries:
         alert = (
-            "Sweep fetched 0 ads across "
-            f"{len(countries) * len(search_terms)} queries — the Facebook session is "
+            f"Sweep fetched 0 ads across {queries} queries — the Facebook session is "
             "likely dead or expired. Open the Ingestion page and paste a fresh cookie."
         )
         logger.warning(alert)

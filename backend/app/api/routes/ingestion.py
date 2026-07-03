@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.ingestion.pipeline import (
     DEFAULT_COUNTRIES,
     DEFAULT_SEARCH_TERMS,
+    GLOBAL_COUNTRIES,
     LAST_RUN,
     ingest_best_performing,
     _as_list,
@@ -120,4 +121,8 @@ async def ingestion_config():
         "min_days_running": int(getattr(settings, "INGEST_MIN_DAYS_RUNNING", 7)),
         "min_variants": int(getattr(settings, "INGEST_MIN_VARIANTS", 3)),
         "max_per_country": int(getattr(settings, "INGEST_MAX_PER_COUNTRY", 40)),
+        "global_enabled": bool(getattr(settings, "INGEST_GLOBAL_ENABLED", True)),
+        "global_countries": _as_list(getattr(settings, "INGEST_GLOBAL_COUNTRIES", None), GLOBAL_COUNTRIES),
+        "global_interval_hours": float(getattr(settings, "INGEST_GLOBAL_INTERVAL_HOURS", 72)),
+        "global_max_per_country": int(getattr(settings, "INGEST_GLOBAL_MAX_PER_COUNTRY", 60)),
     }

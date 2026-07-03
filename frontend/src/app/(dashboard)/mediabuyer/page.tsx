@@ -39,9 +39,11 @@ const EMPTY_PROFILE: Profile = {
 const COUNTRIES: [string, string][] = [
   ["TN", "Tunisia"], ["DZ", "Algeria"], ["MA", "Morocco"], ["EG", "Egypt"],
   ["SA", "Saudi Arabia"], ["AE", "UAE"], ["KW", "Kuwait"], ["QA", "Qatar"],
+  ["US", "USA"], ["CA", "Canada"], ["GB", "UK"], ["AU", "Australia"], ["FR", "France"],
 ];
 const CURRENCY: Record<string, string> = {
   TN: "TND", DZ: "DZD", MA: "MAD", EG: "EGP", SA: "SAR", AE: "AED", KW: "KWD", QA: "QAR",
+  US: "USD", CA: "CAD", GB: "GBP", AU: "AUD", FR: "EUR",
 };
 const CREATIVE_TYPES = ["None yet", "Product images", "UGC video", "Product demo video", "Carousel"];
 const EXPERIENCE: [string, string][] = [

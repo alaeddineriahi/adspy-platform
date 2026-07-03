@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     INGEST_SCHEDULE_ENABLED: bool = False
     INGEST_INTERVAL_HOURS: float = 12
 
+    # Global trend markets (US/EU winners reach MENA months later — trend
+    # arbitrage). Separate, lighter cadence so the extra request volume
+    # doesn't burn the FB session.
+    INGEST_GLOBAL_ENABLED: bool = True
+    INGEST_GLOBAL_COUNTRIES: str = ""       # default: US,CA,GB,AU,FR
+    INGEST_GLOBAL_INTERVAL_HOURS: float = 72
+    INGEST_GLOBAL_MAX_PER_COUNTRY: int = 60
+
     # Sweep scope (comma-separated strings in .env, or use defaults)
     INGEST_COUNTRIES: str = ""      # e.g. "TN,MA,EG,SA,AE"
     INGEST_SEARCH_TERMS: str = ""   # e.g. "livraison gratuite,promo,تخفيضات"

@@ -94,6 +94,14 @@ banner appears if a sweep fetches 0 ads (dead cookie) — paste a fresh one.
    "capture the search request" box. Re-capture if sweeps suddenly return 0
    (Meta rotated the `doc_id`).
 
+### Markets & cadence
+Two scheduled sweeps share one FB session (serialized by a lock):
+- **Core** (every 12h): TN MA DZ EG SA AE KW QA — FR+AR category terms
+- **Global trends** (every 72h, cap 60): US CA GB AU FR — EN terms for the
+  anglo markets, FR-only terms for France. Rationale: what scales in the
+  US/France reaches MENA months later (and French creatives reuse directly
+  in North Africa) — trend arbitrage for users.
+
 ### Tuning "best performing" (`backend/.env`)
 ```
 INGEST_SCHEDULE_ENABLED=true
@@ -102,6 +110,9 @@ INGEST_MIN_DAYS_RUNNING=7    # longevity gate
 INGEST_MIN_VARIANTS=3        # OR scaling gate
 INGEST_MAX_PER_COUNTRY=120   # top-scored ads kept per country per sweep
 INGEST_STALE_DAYS=14         # unseen this long -> marked inactive
+INGEST_GLOBAL_ENABLED=true   # the US/CA/GB/AU/FR trend sweep
+INGEST_GLOBAL_INTERVAL_HOURS=72
+INGEST_GLOBAL_MAX_PER_COUNTRY=60
 ```
 `.env` changes need a backend restart to reach the scheduler.
 

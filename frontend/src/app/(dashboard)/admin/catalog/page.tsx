@@ -128,7 +128,7 @@ export default function AdminCatalogPage() {
             className="border border-gray-300 rounded-lg text-sm px-3"
           >
             <option value="">All countries</option>
-            {["TN", "MA", "DZ", "EG", "SA", "AE"].map((c) => (
+            {["TN", "MA", "DZ", "EG", "SA", "AE", "KW", "QA", "US", "CA", "GB", "AU", "FR"].map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>

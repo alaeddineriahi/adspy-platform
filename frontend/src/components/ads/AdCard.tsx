@@ -1,7 +1,7 @@
 "use client";
 
 import { Ad } from "@/types";
-import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem } from "lucide-react";
+import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem, CircleDollarSign } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useSaved } from "@/components/SavedProvider";
@@ -16,6 +16,13 @@ const GRADIENTS: [string, string][] = [
   ["#f05427", "#3e86c6"],
   ["#3e86c6", "#ec4492"],
 ];
+
+/** "$4.2k" style compact money formatting for spend estimates. */
+export function fmtUsd(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `$${v}`;
+}
 
 function BrandPlaceholder({ name, format }: { name: string; format?: string }) {
   let hash = 0;
@@ -140,6 +147,19 @@ export function AdCard({ ad }: { ad: Ad }) {
             <span className="flex items-center gap-1 text-emerald-600" title="Creative variants running (scaling = budget)">
               <Layers className="w-3 h-3" />
               {ad.variant_count}× scaling
+            </span>
+          )}
+          {typeof ad.est_spend_min_usd === "number" && ad.est_spend_min_usd > 0 && (
+            <span
+              className="flex items-center gap-1 text-amber-600"
+              title={
+                ad.spend_basis === "reach"
+                  ? `Estimated from REAL EU reach data (${ad.eu_total_reach?.toLocaleString()} people reached): ${fmtUsd(ad.est_spend_min_usd)}–${fmtUsd(ad.est_spend_max_usd!)}`
+                  : `Estimated spend ${fmtUsd(ad.est_spend_min_usd)}–${fmtUsd(ad.est_spend_max_usd!)} (scaling × duration heuristic)`
+              }
+            >
+              <CircleDollarSign className="w-3 h-3" />
+              {fmtUsd(ad.est_spend_min_usd)}+{ad.spend_basis === "reach" ? " ✓" : ""}
             </span>
           )}
           <span className="flex items-center gap-1 ml-auto">

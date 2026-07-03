@@ -18,6 +18,10 @@ export interface Ad {
   heat?: number;                              // "printing money NOW" composite 0-100
   velocity?: number;                          // creative variants per 30d of age
   momentum?: "hot" | "proven" | "steady";
+  est_spend_min_usd?: number;                 // honest wide band, labeled estimate
+  est_spend_max_usd?: number;
+  spend_basis?: "heuristic" | "reach";        // reach = real DSA numbers (EU ads)
+  eu_total_reach?: number;
   first_seen: string;
   last_seen: string;
   is_active: boolean;

@@ -82,6 +82,10 @@ ADS_INDEX_MAPPING = {
             "heat": {"type": "float"},          # "printing money NOW" composite
             "velocity": {"type": "float"},      # variants per 30d of age
             "momentum": {"type": "keyword"},    # hot | proven | steady
+            "est_spend_min_usd": {"type": "integer"},
+            "est_spend_max_usd": {"type": "integer"},
+            "spend_basis": {"type": "keyword"},   # heuristic | reach
+            "eu_total_reach": {"type": "long"},   # real, DSA-published (EU ads)
             "ecom_signals": {"type": "integer"},
             "is_ecommerce": {"type": "boolean"},
             "strong_commerce": {"type": "boolean"},

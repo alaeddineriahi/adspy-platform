@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
+import { fmtUsd } from "@/components/ads/AdCard";
 import { Ad } from "@/types";
 
 interface ScriptHook {
@@ -139,11 +140,30 @@ export default function AdDetailPage() {
 
           <h1 className="text-xl font-black tracking-tight text-[#1d1d1f] mb-1">{ad.advertiser_name}</h1>
 
-          <div className="flex items-center gap-4 text-sm text-gray-500 mb-6">
+          <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
             <span className="flex items-center gap-1"><Globe className="w-4 h-4" />{ad.country}</span>
             <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{ad.days_running}d running</span>
             <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{ad.first_seen?.slice(0, 10)}</span>
           </div>
+
+          {/* Estimated spend */}
+          {typeof ad.est_spend_min_usd === "number" && ad.est_spend_min_usd > 0 && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-6">
+              <p className="text-sm font-semibold text-amber-900">
+                💰 Est. total spend: {fmtUsd(ad.est_spend_min_usd)} – {fmtUsd(ad.est_spend_max_usd!)}
+                {ad.spend_basis === "reach" && (
+                  <span className="ml-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                    ✓ real reach data
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                {ad.spend_basis === "reach"
+                  ? `Based on ${ad.eu_total_reach?.toLocaleString()} people actually reached (EU transparency data) × market CPM.`
+                  : `Estimate from ${ad.variant_count ?? 1} creative variants × ${ad.days_running}d runtime × market budgets. Meta doesn't publish exact spend for commercial ads — nobody has it.`}
+              </p>
+            </div>
+          )}
 
           {/* Ad copy */}
           <div className="bg-gray-50 rounded-xl p-4 mb-4 relative group">

@@ -17,6 +17,8 @@ from app.core.config import settings
 from app.core.elasticsearch import get_es_client, setup_index
 from app.ingestion.scraper import RawAd, fetch_ads
 from app.ingestion.scoring import score_ad, compute_heat
+from app.ingestion.spend import estimate_spend
+from app.ingestion.eu_reach import EU_COUNTRIES, fetch_eu_reach, apply_reach_to_doc
 from app.ingestion.media import mirror_to_r2, r2_enabled
 
 logger = logging.getLogger("adspy.ingest")
@@ -308,9 +310,31 @@ async def _run_sweep(
         doc["heat"] = heat
         doc["velocity"] = velocity
         doc["momentum"] = momentum
+
+        # Honest spend estimate (wide band, labeled). Upgraded in place to a
+        # reach-based figure for EU ads when enrichment data is available.
+        lo, hi, basis = estimate_spend(ad.country, s.days_running, s.variant_count)
+        doc["est_spend_min_usd"] = lo
+        doc["est_spend_max_usd"] = hi
+        doc["spend_basis"] = basis
         return doc
 
     docs = await asyncio.gather(*[_build_doc(ad, s) for ad, s in final])
+
+    # EU reach enrichment: for EU markets the official DSA API publishes REAL
+    # reach per ad — join by ad_archive_id and upgrade those spend estimates.
+    # No-op while META_ACCESS_TOKEN is missing/expired.
+    eu_swept = [c for c in countries if c in EU_COUNTRIES]
+    if eu_swept and any(d.get("country") in EU_COUNTRIES for d in docs):
+        reach_map: dict[str, int] = {}
+        for c in eu_swept:
+            for term in (explicit_terms if explicit_terms else default_terms_for(c)):
+                reach_map.update(await fetch_eu_reach(c, term))
+        if reach_map:
+            for d in docs:
+                apply_reach_to_doc(d, reach_map)
+            enriched = sum(1 for d in docs if d.get("eu_total_reach"))
+            logger.info("EU reach enrichment: real reach on %s ads.", enriched)
 
     indexed = 0
     marked_inactive = 0

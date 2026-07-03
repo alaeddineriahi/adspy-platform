@@ -15,6 +15,9 @@ export interface Ad {
   snapshot_url?: string;
   variant_count?: number;
   performance_score?: number;
+  heat?: number;                              // "printing money NOW" composite 0-100
+  velocity?: number;                          // creative variants per 30d of age
+  momentum?: "hot" | "proven" | "steady";
   first_seen: string;
   last_seen: string;
   is_active: boolean;

@@ -147,6 +147,54 @@ def _classify_ecommerce(text: str, link_url: str = "", cta: str = "") -> tuple[b
     return signals >= 1, signals, strong, ""
 
 
+def compute_heat(
+    days: int,
+    variants: int,
+    ecom_signals: int,
+    strong_commerce: bool,
+    is_active: bool = True,
+    has_media: bool = True,
+) -> tuple[float, float, str]:
+    """(heat 0-100, velocity, momentum) — the "printing money NOW" signal.
+
+    performance_score answers "has this ad printed money?"; heat answers "is it
+    printing money TODAY?" — which is what a buyer choosing a product actually
+    needs. The key input is VELOCITY (variants per 30 days of age): 12 variants
+    on a 3-week-old ad is an advertiser pouring budget in right now, while 28
+    variants on a 600-day-old ad is history. Longevity gets a sweet spot
+    (~2 weeks–3 months) then decays — old trends are validated but crowded.
+
+    momentum labels the card: "hot" = young & scaling fast, "proven" =
+    long-lived, still active and heavily scaled, "steady" = the rest.
+    """
+    velocity = round(variants / max(days, 7) * 30, 1)
+    vel_c = min(velocity, 10) / 10
+    scale_c = min(variants, 25) / 25
+    ecom_c = min(ecom_signals, 5) / 5
+    age_c = min(days, 90) / 90 if days <= 90 else max(0.4, 1 - (days - 90) / 500)
+
+    heat = 100 * (0.45 * vel_c + 0.25 * scale_c + 0.15 * ecom_c + 0.15 * age_c)
+    if strong_commerce:
+        heat *= 1.08
+    if not is_active:
+        heat *= 0.6   # a dead ad can inspire, but it isn't printing money now
+    if not has_media:
+        heat -= 10    # a money feed headlined by gray placeholder tiles sells nothing
+
+    heat = round(max(0.0, min(100.0, heat)), 1)
+    # hot = young & multiplying; a 45-90d high-velocity ad is still "now", so
+    # the hot window stretches to 60d (and beyond on raw velocity ≥ 8/mo).
+    if variants >= 4 and (
+        (days <= 60 and velocity >= 3) or (days < 90 and velocity >= 8)
+    ):
+        momentum = "hot"
+    elif days >= 90 and variants >= 8 and is_active:
+        momentum = "proven"
+    else:
+        momentum = "steady"
+    return heat, velocity, momentum
+
+
 def score_ad(ad: RawAd, now_ts: Optional[int] = None) -> AdScore:
     now_ts = now_ts or int(datetime.now(timezone.utc).timestamp())
     text = ad.primary_text

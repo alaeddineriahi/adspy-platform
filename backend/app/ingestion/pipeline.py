@@ -16,7 +16,7 @@ from typing import Iterable, Optional
 from app.core.config import settings
 from app.core.elasticsearch import get_es_client, setup_index
 from app.ingestion.scraper import RawAd, fetch_ads
-from app.ingestion.scoring import score_ad
+from app.ingestion.scoring import score_ad, compute_heat
 from app.ingestion.media import mirror_to_r2, r2_enabled
 
 logger = logging.getLogger("adspy.ingest")
@@ -294,6 +294,20 @@ async def _run_sweep(
                 doc["thumbnail"] = candidates[0]
         elif candidates:
             doc["thumbnail"] = candidates[0]
+
+        # Heat is computed here (not in _to_doc) because it factors in whether
+        # we actually have a creative to show.
+        heat, velocity, momentum = compute_heat(
+            days=s.days_running,
+            variants=s.variant_count,
+            ecom_signals=s.ecom_signals,
+            strong_commerce=s.strong_commerce,
+            is_active=doc.get("is_active", True),
+            has_media=bool(doc.get("thumbnail")),
+        )
+        doc["heat"] = heat
+        doc["velocity"] = velocity
+        doc["momentum"] = momentum
         return doc
 
     docs = await asyncio.gather(*[_build_doc(ad, s) for ad, s in final])

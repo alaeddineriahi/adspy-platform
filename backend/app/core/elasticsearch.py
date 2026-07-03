@@ -79,6 +79,9 @@ ADS_INDEX_MAPPING = {
             "days_running": {"type": "integer"},
             "variant_count": {"type": "integer"},
             "performance_score": {"type": "float"},
+            "heat": {"type": "float"},          # "printing money NOW" composite
+            "velocity": {"type": "float"},      # variants per 30d of age
+            "momentum": {"type": "keyword"},    # hot | proven | steady
             "ecom_signals": {"type": "integer"},
             "is_ecommerce": {"type": "boolean"},
             "strong_commerce": {"type": "boolean"},
@@ -169,12 +172,12 @@ async def search_ads(
     # Sort
     sort_clause = []
     if sort == "best_performing":
-        # "Printed money": scaling/commerce-weighted composite first, then raw
-        # scaling, then longevity as a tiebreak. Missing scores sort last.
+        # "Printing money NOW": heat leads (velocity-weighted, media-aware),
+        # lifetime score + raw scaling break ties. Missing fields sort last.
         sort_clause = [
+            {"heat": {"order": "desc", "missing": "_last"}},
             {"performance_score": {"order": "desc", "missing": "_last"}},
             {"variant_count": {"order": "desc", "missing": "_last"}},
-            {"days_running": "desc"},
         ]
     elif sort == "longest_running":
         sort_clause = [{"days_running": "desc"}, {"first_seen": "asc"}]

@@ -1,7 +1,7 @@
 "use client";
 
 import { Ad } from "@/types";
-import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play } from "lucide-react";
+import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useSaved } from "@/components/SavedProvider";
@@ -88,13 +88,23 @@ export function AdCard({ ad }: { ad: Ad }) {
         >
           <Bookmark className={`w-4 h-4 ${saved ? "fill-current" : ""}`} />
         </button>
-        {typeof ad.performance_score === "number" && (
+        {typeof (ad.heat ?? ad.performance_score) === "number" && (
           <span
             className="absolute bottom-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold holo-gradient text-white shadow-sm"
-            title="Money score (0–100): scaling + longevity + commerce"
+            title="Money heat (0–100): scaling velocity + commerce, weighted to NOW"
           >
             <TrendingUp className="w-3 h-3" />
-            {Math.round(ad.performance_score)}
+            {Math.round((ad.heat ?? ad.performance_score)!)}
+          </span>
+        )}
+        {ad.momentum === "hot" && (
+          <span className="absolute bottom-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold text-white shadow-sm bg-gradient-to-r from-orange-500 to-red-500">
+            <Flame className="w-3 h-3 fill-current" /> Scaling fast
+          </span>
+        )}
+        {ad.momentum === "proven" && (
+          <span className="absolute bottom-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold text-white shadow-sm bg-gradient-to-r from-violet-600 to-indigo-500">
+            <Gem className="w-3 h-3" /> Proven winner
           </span>
         )}
       </div>
@@ -110,6 +120,17 @@ export function AdCard({ ad }: { ad: Ad }) {
           </span>
         </div>
         <p className="text-sm text-gray-600 line-clamp-2 mb-3">{ad.copy_text}</p>
+        {/* Why-this-wins insight line */}
+        {ad.momentum === "hot" && (
+          <p className="text-xs font-medium text-orange-600 mb-2">
+            {ad.variant_count} variants in {ad.days_running}d — budget pouring in right now
+          </p>
+        )}
+        {ad.momentum === "proven" && (
+          <p className="text-xs font-medium text-violet-600 mb-2">
+            {ad.days_running}d alive & still active — validated evergreen
+          </p>
+        )}
         <div className="flex items-center gap-3 text-xs text-gray-400">
           <span className="flex items-center gap-1" title="Days the creative has stayed live">
             <Clock className="w-3 h-3" />

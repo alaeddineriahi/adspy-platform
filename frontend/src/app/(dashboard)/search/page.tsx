@@ -156,7 +156,7 @@ export default function SearchPage() {
           onChange={(e) => setSort(e.target.value as SortBy)}
           className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
         >
-          <option value="best_performing">Top performing</option>
+          <option value="best_performing">🔥 Printing money now</option>
           <option value="newest">Newest first</option>
           <option value="longest_running">Longest running</option>
           <option value="relevance">Most relevant</option>
@@ -190,7 +190,7 @@ export default function SearchPage() {
             ) : (
               <p className="text-sm text-gray-500 flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-emerald-500" />
-                Top performing ads — {total.toLocaleString()} e-commerce winners ranked by money printed (scaling + longevity)
+                {total.toLocaleString()} e-commerce winners — ranked by what&apos;s printing money right now (scaling velocity first)
               </p>
             )}
           </div>

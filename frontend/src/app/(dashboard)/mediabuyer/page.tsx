@@ -9,6 +9,7 @@ import { useUsage } from "@/components/UsageProvider";
 
 const PROFILE_KEY = "adspy_buyer_profile";
 const CHAT_KEY = "adspy_buyer_chat";
+const BRAND_INTEL_KEY = "adspy_brand_intel"; // written by the Website Intel page
 
 interface Msg {
   role: "user" | "assistant";
@@ -139,6 +140,7 @@ export default function MediaBuyerPage() {
   const [adId, setAdId] = useState<string | null>(null);
   const [adLabel, setAdLabel] = useState<string>("");
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
+  const [brandIntel, setBrandIntel] = useState<{ brand_name: string; summary: string } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,13 @@ export default function MediaBuyerPage() {
       if (chat) {
         const parsed = JSON.parse(chat);
         if (Array.isArray(parsed)) setMessages(parsed);
+      }
+    } catch {}
+    try {
+      const intel = localStorage.getItem(BRAND_INTEL_KEY);
+      if (intel) {
+        const parsed = JSON.parse(intel);
+        if (parsed?.summary) setBrandIntel(parsed);
       }
     } catch {}
     setLoaded(true);
@@ -215,10 +224,16 @@ export default function MediaBuyerPage() {
       setStreaming(true);
       setOutOfCredits(false);
       try {
+        const prof: Record<string, unknown> = { ...(cleanProfile(profile) ?? {}) };
+        if (brandIntel) prof.brand_summary = brandIntel.summary;
         const res = await authFetch(getToken, "/api/mediabuyer/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: history, ad_id: adId, profile: cleanProfile(profile) }),
+          body: JSON.stringify({
+            messages: history,
+            ad_id: adId,
+            profile: Object.keys(prof).length ? prof : undefined,
+          }),
         });
         if (res.status === 402) setOutOfCredits(true);
         if (!res.ok || !res.body) throw new Error(await apiError(res));
@@ -249,7 +264,7 @@ export default function MediaBuyerPage() {
         setStreaming(false);
       }
     },
-    [messages, streaming, adId, profile, getToken, refreshUsage]
+    [messages, streaming, adId, profile, brandIntel, getToken, refreshUsage]
   );
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -298,6 +313,22 @@ export default function MediaBuyerPage() {
           <div className="mt-3 inline-flex items-center gap-2 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg px-3 py-1.5">
             <Sparkles className="w-3.5 h-3.5" />
             Planning around a spied winner: <span className="font-semibold">{adLabel}</span>
+          </div>
+        )}
+        {brandIntel && (
+          <div className="mt-3 ml-2 inline-flex items-center gap-2 text-xs bg-violet-50 text-violet-700 border border-violet-100 rounded-lg px-3 py-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Grounded in your brand: <span className="font-semibold">{brandIntel.brand_name}</span>
+            <button
+              onClick={() => {
+                setBrandIntel(null);
+                try { localStorage.removeItem(BRAND_INTEL_KEY); } catch {}
+              }}
+              title="Stop using this brand context"
+              className="ml-1 hover:text-violet-900 font-bold"
+            >
+              ✕
+            </button>
           </div>
         )}
         {!showSetup && summary && (

@@ -39,6 +39,9 @@ class BuyerProfile(BaseModel):
     experience: Optional[str] = None        # none | beginner | intermediate
     platform: Optional[str] = None          # meta | tiktok
     product: Optional[str] = None
+    # Structured summary from Website Intel (analyze-website) — grounds advice
+    # in the user's actual store. Capped so a hostile client can't stuff tokens.
+    brand_summary: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -54,6 +57,8 @@ async def chat(req: ChatRequest, uid: str = Depends(get_user_id)):
     await spend_credits(uid)
     history = [m.model_dump() for m in req.messages if m.content.strip()][-_MAX_MESSAGES:]
     profile = req.profile.model_dump(exclude_none=True) if req.profile else None
+    if profile and profile.get("brand_summary"):
+        profile["brand_summary"] = str(profile["brand_summary"])[:2000]
 
     async def gen():
         try:

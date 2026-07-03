@@ -134,6 +134,9 @@ def build_profile_context(profile: Optional[dict]) -> str:
         rows.append(f"- Platform: {platform}")
     if product:
         rows.append(f"- Product / niche: {product}")
+    brand = (profile.get("brand_summary") or "").strip()
+    if brand:
+        rows.append(f"- THEIR BRAND (from analyzing their website — treat as ground truth):\n{brand}")
     if not rows:
         return ""
     return (

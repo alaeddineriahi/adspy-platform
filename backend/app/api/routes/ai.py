@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
+from app.ai.brand_intel import analyze_website, FetchError
 from app.ai.script_generator import (
     generate_script,
     generate_copy,
@@ -16,7 +17,7 @@ from app.ai.script_generator import (
     analyze_creative,
 )
 from app.core.auth import get_user_id
-from app.core.credits import spend_credits
+from app.core.credits import spend_credits, get_usage as credits_usage
 from app.core.elasticsearch import get_es_client
 
 router = APIRouter()
@@ -50,6 +51,36 @@ class AnalyzeRequest(BaseModel):
     ad_id: Optional[str] = None
     copy_text: Optional[str] = None
     platform: str = "meta"
+
+
+class WebsiteRequest(BaseModel):
+    url: str
+
+
+@router.post("/analyze-website")
+async def api_analyze_website(req: WebsiteRequest, uid: str = Depends(get_user_id)):
+    """Website Intel: fetch a store URL and produce a structured brand brief."""
+    url = req.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Paste a website URL first.")
+    # Pre-check the allowance so a 0-credit user never triggers a (paid) LLM
+    # call; the real spend happens only after the analysis succeeds, so an
+    # unreachable site costs nothing.
+    usage = await credits_usage(uid)
+    if usage["credits_remaining"] < 1:
+        raise HTTPException(status_code=402, detail={
+            "error": "out_of_credits",
+            "message": f"You've used all {usage['credits_limit']} AI credits this month. "
+                       "Upgrade to keep analyzing.",
+        })
+    try:
+        result = await analyze_website(url)
+    except FetchError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Analysis failed — try again in a moment.")
+    credits = await spend_credits(uid)
+    return {**result, "credits": credits}
 
 
 @router.post("/generate-script")

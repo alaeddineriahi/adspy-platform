@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Search, Loader2, TrendingUp } from "lucide-react";
 import { AdCard } from "@/components/ads/AdCard";
 import { SkeletonCard } from "@/components/ads/SkeletonCard";
@@ -24,12 +24,13 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
 
-  const doSearch = useCallback(async (p: number = 1) => {
+  const doSearch = useCallback(async (p: number = 1, qOverride?: string) => {
     setLoading(true);
     setSearched(true);
 
+    const term = qOverride ?? query;
     const params = new URLSearchParams();
-    if (query) params.set("q", query);
+    if (term) params.set("q", term);
     if (platform !== "all") params.set("platform", platform);
     if (format !== "all") params.set("format", format);
     if (country !== "all") params.set("country", country);
@@ -55,10 +56,25 @@ export default function SearchPage() {
     doSearch(1);
   };
 
+  // Deep links: /search?q=<term> (e.g. from Website Intel's "spy similar ads").
+  // window.location instead of useSearchParams — the latter needs a Suspense
+  // boundary for next build's static prerender. A ref (not just setQuery)
+  // hands the term to the initial search below, since state lands too late.
+  const deepLinkQ = useRef<string | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) {
+      deepLinkQ.current = q;
+      setQuery(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-load the best-performing ads on open, and re-run when a filter/sort
   // changes. Keyword typing still waits for an explicit submit.
   useEffect(() => {
-    doSearch(1);
+    doSearch(1, deepLinkQ.current ?? undefined);
+    deepLinkQ.current = null; // only the very first search uses the deep link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform, format, country, sort]);
 

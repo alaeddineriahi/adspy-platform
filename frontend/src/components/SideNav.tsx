@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard } from "lucide-react";
+import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard, ScanSearch } from "lucide-react";
 import { AdminNavLink } from "@/components/AdminNavLink";
 
 const navItems = [
   { href: "/search", label: "Search", icon: Search },
   { href: "/brands", label: "Brand Spy", icon: Eye },
+  { href: "/intel", label: "Website Intel", icon: ScanSearch },
   { href: "/mediabuyer", label: "Media Buyer", icon: Megaphone },
   { href: "/ai", label: "AI Tools", icon: Zap },
   { href: "/saved", label: "Saved", icon: Bookmark },

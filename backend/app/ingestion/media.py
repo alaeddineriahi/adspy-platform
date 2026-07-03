@@ -69,7 +69,9 @@ async def mirror_to_r2(url: str, key: str) -> Optional[str]:
     if not r2_enabled() or not url:
         return None
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        # 10s is plenty for a healthy CDN fetch; dead/hotlink-blocked URLs would
+        # otherwise burn the full timeout × 3 candidates × every doc in a batch.
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             resp = await client.get(url, headers=_FETCH_HEADERS)
         if resp.status_code != 200 or not resp.content:
             logger.info("media fetch %s -> HTTP %s", key, resp.status_code)
@@ -85,5 +87,6 @@ async def mirror_to_r2(url: str, key: str) -> Optional[str]:
         public = (getattr(settings, "R2_PUBLIC_URL", "") or "").rstrip("/")
         return f"{public}/{key}"
     except Exception as e:  # noqa: BLE001 — never let media issues break ingest
-        logger.warning("R2 mirror failed for %s: %s", key, e)
+        # include the exception TYPE — httpx timeouts stringify to ""
+        logger.warning("R2 mirror failed for %s: %s %s", key, type(e).__name__, e)
         return None

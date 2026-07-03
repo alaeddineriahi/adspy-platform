@@ -16,6 +16,7 @@ from app.core.elasticsearch import (
     get_top_brands as es_top_brands,
 )
 from app.models.watchlist import WatchedBrand
+from app.models.brand import BrandSnapshot
 
 router = APIRouter()
 
@@ -24,18 +25,44 @@ router = APIRouter()
 async def search_brands(
     q: Optional[str] = Query(None, description="Filter by advertiser name (optional)"),
     country: Optional[str] = Query(None, description="ISO country code"),
+    min_live_ads: int = Query(0, ge=0, description="Only brands with at least N ads live (deep-dive data)"),
     limit: int = Query(24, ge=1, le=100),
 ):
     """Top money-printing advertisers, ranked by total creative scaling.
 
     With no `q` this returns the leaderboard of brands printing the most money;
-    pass `q` to filter that leaderboard by name.
+    pass `q` to filter that leaderboard by name, `min_live_ads` for the
+    "brands running 50+ ads" quality cut.
     """
     es = get_es_client()
     try:
-        return await es_top_brands(es, q=q, country=country, limit=limit)
+        return await es_top_brands(es, q=q, country=country, min_live_ads=min_live_ads, limit=limit)
     finally:
         await es.close()
+
+
+@router.get("/{brand_id}/trajectory")
+async def get_brand_trajectory(brand_id: str):
+    """Deep-dive snapshot history for one brand: live-ad count over time.
+
+    A rising series is the strongest observable "they found a winner and are
+    pouring budget in" signal. Empty until the brand has been deep-dived.
+    """
+    async with async_session() as db:
+        rows = await db.execute(
+            select(BrandSnapshot.live_ads, BrandSnapshot.captured_at)
+            .where(BrandSnapshot.page_id == brand_id)
+            .order_by(BrandSnapshot.captured_at.asc())
+            .limit(120)
+        )
+        points = [
+            {"live_ads": n, "at": at.isoformat() if at else None}
+            for n, at in rows.all()
+        ]
+    growth = None
+    if len(points) >= 2 and points[0]["live_ads"]:
+        growth = points[-1]["live_ads"] - points[0]["live_ads"]
+    return {"points": points, "growth": growth}
 
 
 @router.get("/{brand_id}/creatives")

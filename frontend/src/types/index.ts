@@ -5,6 +5,8 @@ export interface Ad {
   advertiser_id: string;
   ad_id: string;
   country: string;
+  countries?: string[];                       // every market sweeps have seen it in
+  brand_live_ads?: number;                    // advertiser's TOTAL live ads (deep-dive)
   language: string;
   ad_format: "image" | "video" | "carousel";
   copy_text: string;
@@ -37,4 +39,5 @@ export interface Brand {
   total_variants?: number;
   top_score?: number;
   max_days?: number;
+  live_ads?: number;          // REAL total live-ad count from the brand deep-dive
 }

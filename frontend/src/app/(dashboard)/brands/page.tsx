@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Eye, Search, Loader2, TrendingUp, Layers, Clock } from "lucide-react";
+import { Eye, Search, Loader2, TrendingUp, Layers, Clock, Radio } from "lucide-react";
 import Link from "next/link";
 import { Brand } from "@/types";
 
@@ -9,16 +9,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function BrandsPage() {
   const [query, setQuery] = useState("");
+  const [bigOnly, setBigOnly] = useState(false); // "50+ ads live" quality cut
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(false);
 
-  const load = useCallback(async (q: string) => {
+  const load = useCallback(async (q: string, big: boolean) => {
     setLoading(true);
     setSearched(true);
     try {
       const params = new URLSearchParams();
       if (q) params.set("q", q);
+      if (big) params.set("min_live_ads", "50");
       params.set("limit", "24");
       const res = await fetch(`${API_URL}/api/brands/search?${params}`);
       const data = await res.json();
@@ -32,12 +34,18 @@ export default function BrandsPage() {
 
   // Show the money-printing leaderboard on open; the box just filters it by name.
   useEffect(() => {
-    load("");
+    load("", false);
   }, [load]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    load(query);
+    load(query, bigOnly);
+  };
+
+  const toggleBig = () => {
+    const next = !bigOnly;
+    setBigOnly(next);
+    load(query, next);
   };
 
   return (
@@ -56,10 +64,26 @@ export default function BrandsPage() {
         />
       </form>
 
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={toggleBig}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+            bigOnly
+              ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+              : "bg-white text-gray-600 border-[#e6e6e7] hover:border-[#1d1d1f]"
+          }`}
+          title="Only brands we've verified are running 50+ ads in the Ad Library right now"
+        >
+          <Radio className="w-3.5 h-3.5" /> 50+ ads live
+        </button>
+      </div>
+
       {!loading && (
         <p className="text-sm text-gray-500 mb-4 flex items-center gap-1.5">
           <TrendingUp className="w-4 h-4 text-emerald-500" />
-          {query
+          {bigOnly
+            ? `${brands.length} verified heavy spenders — 50+ ads live in the Ad Library right now`
+            : query
             ? `${brands.length} brands matching "${query}"`
             : "Brands printing the most money — ranked by total creative scaling"}
         </p>
@@ -89,8 +113,18 @@ export default function BrandsPage() {
                 )}
                 {b.advertiser_name}
               </span>
-              <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded shrink-0">
-                {b.active_ads} active
+              <span className="flex items-center gap-1.5 shrink-0">
+                {(b.live_ads ?? 0) > 0 && (
+                  <span
+                    className="text-xs px-2 py-1 rounded font-bold text-white bg-gradient-to-r from-rose-500 to-orange-500"
+                    title="Verified: total ads this brand has live in the Ad Library right now"
+                  >
+                    {b.live_ads} live now
+                  </span>
+                )}
+                <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
+                  {b.active_ads} active
+                </span>
               </span>
             </div>
 

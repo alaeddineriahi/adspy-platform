@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     INGEST_COUNTRIES: str = ""      # e.g. "TN,MA,EG,SA,AE"
     INGEST_SEARCH_TERMS: str = ""   # e.g. "livraison gratuite,promo,تخفيضات"
 
+    # Brand deep-dive: after each sweep, pull the FULL live catalog of the top
+    # winner brands by page_id (real "N ads live" counts + snapshot history +
+    # their whole catalog joins the index). Capped per sweep to protect the
+    # FB session; a brand is re-dived at most once per cooldown window.
+    INGEST_DEEPDIVE_ENABLED: bool = True
+    INGEST_DEEPDIVE_PER_SWEEP: int = 8
+    INGEST_DEEPDIVE_MIN_VARIANTS: int = 5     # brand qualifies when an ad scales this hard
+    INGEST_DEEPDIVE_MAX_KEEP: int = 30        # max catalog ads indexed per brand
+    INGEST_DEEPDIVE_COOLDOWN_HOURS: int = 24
+
     # Best-performing thresholds
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3

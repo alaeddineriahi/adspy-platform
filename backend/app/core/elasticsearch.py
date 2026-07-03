@@ -64,7 +64,9 @@ ADS_INDEX_MAPPING = {
             },
             # Filter / facet fields
             "platform": {"type": "keyword"},
-            "country": {"type": "keyword"},
+            "country": {"type": "keyword"},        # first market we saw the ad in
+            "countries": {"type": "keyword"},      # every market sweeps have seen it in
+            "brand_live_ads": {"type": "integer"}, # advertiser's TOTAL live ads (deep-dive)
             "language": {"type": "keyword"},
             "ad_format": {"type": "keyword"},
             "advertiser_id": {"type": "keyword"},
@@ -156,7 +158,10 @@ async def search_ads(
     if platform:
         filter_clauses.append({"term": {"platform": platform}})
     if country:
-        filter_clauses.append({"term": {"country": country}})
+        # `countries` covers every market the ad was seen in (backfilled on all
+        # docs); a pan-GCC ad now matches SA *and* KW instead of only the last
+        # sweep that touched it.
+        filter_clauses.append({"term": {"countries": country}})
     if language:
         filter_clauses.append({"term": {"language": language}})
     if ad_format:
@@ -262,6 +267,7 @@ async def get_top_brands(
     es: AsyncElasticsearch,
     q: str = None,
     country: str = None,
+    min_live_ads: int = 0,
     limit: int = 24,
 ) -> dict:
     """Rank advertisers by how much money they look to be printing.
@@ -272,17 +278,22 @@ async def get_top_brands(
                           free "they're pouring budget into winners" signal),
       • winning_ads     — how many distinct winners they're running,
       • top_score       — their single best ad's "printed money" score,
-      • max_days        — longest a creative has stayed live.
+      • max_days        — longest a creative has stayed live,
+      • live_ads        — the brand's REAL total live-ad count in the Ad Library
+                          (from the deep-dive; 0 = not yet deep-dived).
     Brands are ordered by total scaling (the money proxy). Pass `q` to filter by
-    name, `country` to scope to one market.
+    name, `country` to scope to one market, `min_live_ads` for the "brands
+    running 50+ ads" style quality cut.
     """
     if q:
         base_query = {"match": {"advertiser_name": {"query": q, "fuzziness": "AUTO"}}}
     else:
         base_query = {"match_all": {}}
     if country:
-        base_query = {"bool": {"must": [base_query], "filter": [{"term": {"country": country}}]}}
+        base_query = {"bool": {"must": [base_query], "filter": [{"term": {"countries": country}}]}}
 
+    # min_live_ads filters BUCKETS, not docs, so over-fetch then cut in Python.
+    bucket_size = limit * 4 if min_live_ads else limit
     body = {
         "size": 0,
         "query": base_query,
@@ -290,16 +301,17 @@ async def get_top_brands(
             "brands": {
                 "terms": {
                     "field": "advertiser_name.keyword",
-                    "size": limit,
+                    "size": bucket_size,
                     "order": {"total_variants": "desc"},
                 },
                 "aggs": {
                     "advertiser_id": {"terms": {"field": "advertiser_id", "size": 1}},
                     "active": {"filter": {"term": {"is_active": True}}},
-                    "countries": {"terms": {"field": "country", "size": 10}},
+                    "countries": {"terms": {"field": "countries", "size": 10}},
                     "total_variants": {"sum": {"field": "variant_count"}},
                     "top_score": {"max": {"field": "performance_score"}},
                     "max_days": {"max": {"field": "days_running"}},
+                    "live_ads": {"max": {"field": "brand_live_ads"}},
                 },
             }
         },
@@ -319,9 +331,12 @@ async def get_top_brands(
             "total_variants": int(b["total_variants"]["value"] or 0),
             "top_score": round(b["top_score"]["value"] or 0, 1),
             "max_days": int(b["max_days"]["value"] or 0),
+            "live_ads": int(b["live_ads"]["value"] or 0),
         }
         for b in buckets
     ]
+    if min_live_ads:
+        brands = [b for b in brands if b["live_ads"] >= min_live_ads][:limit]
     return {"results": brands, "total": len(brands)}
 
 
@@ -336,7 +351,7 @@ async def get_trending_ads(
         {"range": {"days_running": {"gte": 14}}},
     ]
     if country:
-        filters.append({"term": {"country": country}})
+        filters.append({"term": {"countries": country}})
 
     body = {
         "query": {"bool": {"filter": filters}},

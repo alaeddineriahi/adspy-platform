@@ -9,13 +9,18 @@ upserts them into the Elasticsearch `ads` index. Called both by the scheduler
 
 import asyncio
 import logging
+import random
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 
+from sqlalchemy import select
+
 from app.core.config import settings
+from app.core.database import async_session
 from app.core.elasticsearch import get_es_client, setup_index
-from app.ingestion.scraper import RawAd, fetch_ads
+from app.models.brand import BrandSnapshot
+from app.ingestion.scraper import RawAd, fetch_ads, fetch_page_ads
 from app.ingestion.scoring import score_ad, compute_heat
 from app.ingestion.spend import estimate_spend
 from app.ingestion.eu_reach import EU_COUNTRIES, fetch_eu_reach, apply_reach_to_doc
@@ -152,6 +157,7 @@ def _to_doc(ad: RawAd, score) -> dict:
         "advertiser_name": ad.page_name,
         "advertiser_id": ad.page_id,
         "country": ad.country,
+        "countries": [ad.country],  # grows as other sweeps re-see the same ad
         "language": _detect_language(text, ad.country),
         "ad_format": _ad_format(ad),
         "copy_text": text,
@@ -172,6 +178,198 @@ def _to_doc(ad: RawAd, score) -> dict:
         "creative_key": creative_key(ad.page_id, text),
         "source": "ad_library_scrape",
     }
+
+
+async def _build_doc(ad: RawAd, s, sem: asyncio.Semaphore) -> dict:
+    """Score → doc, with the R2 thumbnail mirror + heat + spend estimate.
+
+    Shared by the keyword sweep and the brand deep-dive so every indexed ad is
+    built identically no matter how it was discovered.
+    """
+    doc = _to_doc(ad, s)
+    # Try up to 3 image candidates — the first can be hotlink-blocked or a
+    # dead variant while the second mirrors fine.
+    candidates = [u for u in ad.images[:3] if u]
+    if candidates and r2_enabled():
+        async with sem:
+            for src in candidates:
+                # key prefix "media/" (NOT "ads/") — ad blockers block /ads/ URLs too
+                r2_url = await mirror_to_r2(src, f"media/{ad.ad_id}.jpg")
+                if r2_url:
+                    doc["media_urls"] = [r2_url] + [u for u in doc["media_urls"] if u != src]
+                    doc["thumbnail"] = r2_url
+                    break
+        if "thumbnail" not in doc:
+            # Mirror failed everywhere — a fresh signed FB URL still renders
+            # for days; strictly better than shipping no thumbnail at all.
+            doc["thumbnail"] = candidates[0]
+    elif candidates:
+        doc["thumbnail"] = candidates[0]
+
+    # Heat is computed here (not in _to_doc) because it factors in whether
+    # we actually have a creative to show.
+    heat, velocity, momentum = compute_heat(
+        days=s.days_running,
+        variants=s.variant_count,
+        ecom_signals=s.ecom_signals,
+        strong_commerce=s.strong_commerce,
+        is_active=doc.get("is_active", True),
+        has_media=bool(doc.get("thumbnail")),
+    )
+    doc["heat"] = heat
+    doc["velocity"] = velocity
+    doc["momentum"] = momentum
+
+    # Honest spend estimate (wide band, labeled). Upgraded in place to a
+    # reach-based figure for EU ads when enrichment data is available.
+    lo, hi, basis = estimate_spend(ad.country, s.days_running, s.variant_count)
+    doc["est_spend_min_usd"] = lo
+    doc["est_spend_max_usd"] = hi
+    doc["spend_basis"] = basis
+    return doc
+
+
+async def _merge_existing(es, docs: list[dict]) -> None:
+    """Preserve cross-market identity on upsert.
+
+    `es.index(id=ad_id)` replaces the whole doc, so an ad seen first in SA and
+    later by the KW sweep used to *become* a KW ad. Instead: keep the original
+    `country` (first market we saw it in) and grow the `countries` list — the
+    catalog compounds instead of churning.
+    """
+    ids = [d["ad_id"] for d in docs]
+    if not ids:
+        return
+    try:
+        res = await es.mget(index="ads", body={"ids": ids})
+    except Exception as e:  # noqa: BLE001 — merge is best-effort, never fail a sweep
+        logger.warning("countries merge skipped (mget failed): %s", e)
+        return
+    existing = {d["_id"]: d.get("_source", {}) for d in res.get("docs", []) if d.get("found")}
+    for doc in docs:
+        old = existing.get(doc["ad_id"])
+        if not old:
+            continue
+        merged = set(doc.get("countries") or [doc["country"]])
+        merged.update(old.get("countries") or [])
+        if old.get("country"):
+            merged.add(old["country"])
+            doc["country"] = old["country"]  # first-seen market stays primary
+        doc["countries"] = sorted(merged)
+
+
+async def _deep_dive_pass(es, final: list[tuple[RawAd, object]]) -> dict:
+    """Brand deep-dive: for the hardest-scaling brands this sweep surfaced,
+    pull their FULL live catalog by page_id.
+
+    Per brand this yields: (a) the real "N ads live right now" count — the
+    GetHookd-style brand-strength signal a keyword sweep can never see, (b) a
+    BrandSnapshot row (trajectory history), and (c) their best catalog ads
+    joining the index, which grows the pool with exactly the right ads.
+    """
+    stats = {"brands": 0, "catalog_indexed": 0}
+    if not getattr(settings, "INGEST_DEEPDIVE_ENABLED", True):
+        return stats
+    min_variants = int(getattr(settings, "INGEST_DEEPDIVE_MIN_VARIANTS", 5))
+    per_sweep = int(getattr(settings, "INGEST_DEEPDIVE_PER_SWEEP", 8))
+    max_keep = int(getattr(settings, "INGEST_DEEPDIVE_MAX_KEEP", 30))
+    cooldown_h = int(getattr(settings, "INGEST_DEEPDIVE_COOLDOWN_HOURS", 24))
+
+    # Candidates: one entry per page, qualified by their hardest-scaling ad.
+    by_page: dict[str, tuple[RawAd, object]] = {}
+    for ad, s in final:
+        if not ad.page_id or s.variant_count < min_variants:
+            continue
+        best = by_page.get(ad.page_id)
+        if best is None or s.score > best[1].score:
+            by_page[ad.page_id] = (ad, s)
+    if not by_page:
+        return stats
+
+    # Skip brands dived within the cooldown window (snapshot spam + FB load).
+    recent: set[str] = set()
+    try:
+        since = datetime.now(timezone.utc) - timedelta(hours=cooldown_h)
+        async with async_session() as db:
+            rows = await db.execute(
+                select(BrandSnapshot.page_id).where(
+                    BrandSnapshot.page_id.in_(list(by_page)),
+                    BrandSnapshot.captured_at >= since,
+                )
+            )
+            recent = {r[0] for r in rows.all()}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("deep-dive cooldown check failed (diving anyway): %s", e)
+
+    candidates = sorted(
+        (t for pid, t in by_page.items() if pid not in recent),
+        key=lambda t: t[1].score,
+        reverse=True,
+    )[:per_sweep]
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    sem = asyncio.Semaphore(8)
+    for seed_ad, _seed_score in candidates:
+        ads, live = await fetch_page_ads(seed_ad.page_id, country=seed_ad.country)
+        if not ads and not live:
+            continue
+        stats["brands"] += 1
+
+        # Snapshot the observation (trajectory history). Best-effort.
+        try:
+            async with async_session() as db:
+                db.add(BrandSnapshot(
+                    page_id=seed_ad.page_id, page_name=seed_ad.page_name,
+                    country="ALL", live_ads=live,
+                ))
+                await db.commit()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("brand snapshot insert failed for %s: %s", seed_ad.page_name, e)
+
+        # The brand's catalog ads join the index through the SAME winner filter
+        # as sweep ads. The ALL-countries fetch tags ads "ALL"; attribute them
+        # to the market the brand won in — that's where they're inspirable.
+        for ad in ads:
+            if ad.country == "ALL":
+                ad.country = seed_ad.country
+        uniq = list({ad.ad_id: ad for ad in ads}.values())
+        _assign_variant_counts(uniq)
+        kept = [(ad, s) for ad in uniq if (s := score_ad(ad, now_ts)).keep]
+        kept.sort(key=lambda t: t[1].score, reverse=True)
+        kept = kept[:max_keep]
+
+        docs = await asyncio.gather(*[_build_doc(ad, s, sem) for ad, s in kept])
+        for d in docs:
+            d["brand_live_ads"] = live
+            d["source"] = "brand_deepdive"
+        await _merge_existing(es, docs)
+        for d in docs:
+            await es.index(index="ads", id=d["ad_id"], document=d)
+        stats["catalog_indexed"] += len(docs)
+
+        # Stamp the live-ad count on the brand's PREVIOUSLY indexed ads too, so
+        # Brand Spy's "N ads live" covers the whole footprint.
+        try:
+            await es.update_by_query(
+                index="ads",
+                body={
+                    "query": {"bool": {"filter": [{"term": {"advertiser_id": seed_ad.page_id}}]},},
+                    "script": {"source": "ctx._source.brand_live_ads = params.n",
+                               "params": {"n": live}},
+                    "conflicts": "proceed",
+                },
+                refresh=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("brand_live_ads stamp failed for %s: %s", seed_ad.page_name, e)
+
+        logger.info("Deep-dive %s (%s): %s ads live, %s catalog winners indexed.",
+                    seed_ad.page_name, seed_ad.page_id, live, len(docs))
+        await asyncio.sleep(random.uniform(2.0, 4.0))  # gentle on the FB session
+
+    if stats["catalog_indexed"]:
+        await es.indices.refresh(index="ads")
+    return stats
 
 
 async def ingest_best_performing(
@@ -275,51 +473,7 @@ async def _run_sweep(
 
     # 5) Mirror the lead creative to R2 (persistent thumbnails), then upsert to ES.
     sem = asyncio.Semaphore(8)
-
-    async def _build_doc(ad: RawAd, s) -> dict:
-        doc = _to_doc(ad, s)
-        # Try up to 3 image candidates — the first can be hotlink-blocked or a
-        # dead variant while the second mirrors fine.
-        candidates = [u for u in ad.images[:3] if u]
-        if candidates and r2_enabled():
-            async with sem:
-                for src in candidates:
-                    # key prefix "media/" (NOT "ads/") — ad blockers block /ads/ URLs too
-                    r2_url = await mirror_to_r2(src, f"media/{ad.ad_id}.jpg")
-                    if r2_url:
-                        doc["media_urls"] = [r2_url] + [u for u in doc["media_urls"] if u != src]
-                        doc["thumbnail"] = r2_url
-                        break
-            if "thumbnail" not in doc:
-                # Mirror failed everywhere — a fresh signed FB URL still renders
-                # for days; strictly better than shipping no thumbnail at all.
-                doc["thumbnail"] = candidates[0]
-        elif candidates:
-            doc["thumbnail"] = candidates[0]
-
-        # Heat is computed here (not in _to_doc) because it factors in whether
-        # we actually have a creative to show.
-        heat, velocity, momentum = compute_heat(
-            days=s.days_running,
-            variants=s.variant_count,
-            ecom_signals=s.ecom_signals,
-            strong_commerce=s.strong_commerce,
-            is_active=doc.get("is_active", True),
-            has_media=bool(doc.get("thumbnail")),
-        )
-        doc["heat"] = heat
-        doc["velocity"] = velocity
-        doc["momentum"] = momentum
-
-        # Honest spend estimate (wide band, labeled). Upgraded in place to a
-        # reach-based figure for EU ads when enrichment data is available.
-        lo, hi, basis = estimate_spend(ad.country, s.days_running, s.variant_count)
-        doc["est_spend_min_usd"] = lo
-        doc["est_spend_max_usd"] = hi
-        doc["spend_basis"] = basis
-        return doc
-
-    docs = await asyncio.gather(*[_build_doc(ad, s) for ad, s in final])
+    docs = await asyncio.gather(*[_build_doc(ad, s, sem) for ad, s in final])
 
     # EU reach enrichment: for EU markets the official DSA API publishes REAL
     # reach per ad — join by ad_archive_id and upgrade those spend estimates.
@@ -338,14 +492,24 @@ async def _run_sweep(
 
     indexed = 0
     marked_inactive = 0
+    deepdive_stats = {"brands": 0, "catalog_indexed": 0}
     es = get_es_client()
     try:
         await setup_index(es)
+        # An ad re-seen from another market keeps its identity (country list
+        # grows) instead of being overwritten as a fresh single-country doc.
+        await _merge_existing(es, docs)
         for doc in docs:
             await es.index(index="ads", id=doc["ad_id"], document=doc)
             indexed += 1
         if indexed:
             await es.indices.refresh(index="ads")
+
+        # Brand deep-dive: full catalogs + live-ad counts for the top scalers.
+        try:
+            deepdive_stats = await _deep_dive_pass(es, final)
+        except Exception as e:  # noqa: BLE001 — never fail the sweep on the extra pass
+            logger.warning("Brand deep-dive pass failed: %s", e)
 
         # 6) Freshness pass: re-indexed ads got a new indexed_at above; anything
         # still-active that no sweep has re-seen in INGEST_STALE_DAYS is
@@ -382,6 +546,8 @@ async def _run_sweep(
         "dropped_low_perf": dropped_low_perf,
         "indexed": indexed,
         "marked_inactive": marked_inactive,
+        "brands_deepdived": deepdive_stats["brands"],
+        "catalog_indexed": deepdive_stats["catalog_indexed"],
         "per_country": per_country_count,
         "top": [
             {"advertiser": ad.page_name, "country": ad.country,
@@ -407,5 +573,7 @@ async def _run_sweep(
         stats=stats,
         alert=alert,
     )
-    logger.info("Ingestion sweep done: %s", {k: stats[k] for k in ("fetched", "unique", "kept", "indexed", "marked_inactive")})
+    logger.info("Ingestion sweep done: %s", {k: stats[k] for k in (
+        "fetched", "unique", "kept", "indexed", "marked_inactive",
+        "brands_deepdived", "catalog_indexed")})
     return stats

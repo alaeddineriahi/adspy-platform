@@ -162,9 +162,12 @@ export function AdCard({ ad }: { ad: Ad }) {
               {fmtUsd(ad.est_spend_min_usd)}+{ad.spend_basis === "reach" ? " ✓" : ""}
             </span>
           )}
-          <span className="flex items-center gap-1 ml-auto">
+          <span
+            className="flex items-center gap-1 ml-auto"
+            title={(ad.countries?.length ?? 0) > 1 ? `Running in ${ad.countries!.join(", ")}` : undefined}
+          >
             <Globe className="w-3 h-3" />
-            {ad.country}
+            {(ad.countries?.length ?? 0) > 1 ? ad.countries!.join(" · ") : ad.country}
           </span>
         </div>
       </div>

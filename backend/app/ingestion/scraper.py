@@ -275,26 +275,42 @@ def import_search_template(curl_text: str) -> Optional[dict]:
     return template
 
 
-def _mutate_variables(variables: dict, country: str, term: str, cursor: Optional[str], limit: int) -> dict:
-    """Turn the captured request into a fresh keyword search for one country.
+def _mutate_variables(
+    variables: dict,
+    country: str,
+    term: str,
+    cursor: Optional[str],
+    limit: int,
+    page_id: str = "",
+) -> dict:
+    """Turn the captured request into a fresh search for one country.
 
-    Crucially this neutralizes any *page pin* from the capture: if the user
-    grabbed the request while viewing one advertiser, `searchType="page"` +
-    `viewAllPageID=<that page>` would force every result to that page. We reset
-    those to a keyword search so the term/country actually drive results.
+    Two modes:
+      • keyword (default) — neutralizes any *page pin* from the capture: if the
+        user grabbed the request while viewing one advertiser, `searchType="page"`
+        + `viewAllPageID=<that page>` would force every result to that page. We
+        reset those so the term/country actually drive results.
+      • page (`page_id` set) — deliberately pins to one advertiser to pull their
+        FULL live catalog (the brand deep-dive). Same mechanism, on purpose.
     """
     v = dict(variables)
     v["countries"] = [country]
     if "queryString" in v or "query" not in v:
-        v["queryString"] = term
+        v["queryString"] = "" if page_id else term
     else:
-        v["query"] = term
-    # force keyword search, drop any pinned page
-    v["searchType"] = "keyword_unordered"
-    if "viewAllPageID" in v:
-        v["viewAllPageID"] = "0"
-    if "pageIDs" in v:
-        v["pageIDs"] = []
+        v["query"] = "" if page_id else term
+    if page_id:
+        v["searchType"] = "page"
+        v["viewAllPageID"] = page_id
+        if "pageIDs" in v:
+            v["pageIDs"] = [page_id]
+    else:
+        # force keyword search, drop any pinned page
+        v["searchType"] = "keyword_unordered"
+        if "viewAllPageID" in v:
+            v["viewAllPageID"] = "0"
+        if "pageIDs" in v:
+            v["pageIDs"] = []
     if "first" in v:
         v["first"] = min(limit, 30)
     elif "count" in v:
@@ -328,6 +344,26 @@ def _graphql_page_info(data: dict) -> dict:
         return {}
 
 
+def _graphql_total(data: dict) -> Optional[int]:
+    """Meta's own result count for the search, when the response carries one.
+
+    For a page-pinned search this is the advertiser's TOTAL live-ad count — the
+    number the Ad Library UI shows as "~N results" — which is exactly the
+    "brand runs 50+ ads" signal. Key names drift, so probe the known variants.
+    """
+    try:
+        main = data["data"]["ad_library_main"]
+    except (KeyError, TypeError):
+        return None
+    conn = main.get("search_results_connection") or {}
+    for holder, key in ((conn, "count"), (conn, "total_count"),
+                        (main, "search_results_count"), (main, "total_result_count")):
+        val = holder.get(key)
+        if isinstance(val, int) and val >= 0:
+            return val
+    return None
+
+
 def _graphql_headers(sess: FBSession, friendly: str) -> dict:
     return {
         "User-Agent": getattr(settings, "SCRAPER_USER_AGENT", "") or _DEFAULT_UA,
@@ -344,13 +380,23 @@ def _graphql_headers(sess: FBSession, friendly: str) -> dict:
     }
 
 
-async def _fetch_graphql(sess: FBSession, country: str, search_term: str, limit: int, max_pages: int) -> list[RawAd]:
+async def _fetch_graphql(
+    sess: FBSession,
+    country: str,
+    search_term: str,
+    limit: int,
+    max_pages: int,
+    page_id: str = "",
+) -> tuple[list[RawAd], Optional[int]]:
+    """Returns (ads, meta_total). meta_total is Meta's own result count when the
+    response exposes one (page-pinned searches use it as the live-ad count)."""
     template = _load_template()
     if not template:
-        return []
+        return [], None
     proxy = getattr(settings, "SCRAPER_PROXY", "") or None
     friendly = template.get("friendly_name", "AdLibrarySearchPaginationQuery")
     out: list[RawAd] = []
+    meta_total: Optional[int] = None
     cursor: Optional[str] = None
     logged = False
     refreshed = False
@@ -365,7 +411,7 @@ async def _fetch_graphql(sess: FBSession, country: str, search_term: str, limit:
                 params["__user"] = sess.user_id
             params["doc_id"] = template["doc_id"]
             params["variables"] = json.dumps(
-                _mutate_variables(template["variables"], country, search_term, cursor, limit)
+                _mutate_variables(template["variables"], country, search_term, cursor, limit, page_id)
             )
             try:
                 resp = await client.post(GRAPHQL_URL, headers=_graphql_headers(sess, friendly), data=params)
@@ -392,6 +438,8 @@ async def _fetch_graphql(sess: FBSession, country: str, search_term: str, limit:
                     continue
                 break
             nodes = _graphql_nodes(data)
+            if meta_total is None:
+                meta_total = _graphql_total(data)
             if not logged:
                 if data.get("errors"):
                     logger.warning("GraphQL errors for %s/'%s': %s", country, search_term,
@@ -411,8 +459,37 @@ async def _fetch_graphql(sess: FBSession, country: str, search_term: str, limit:
                 break
             await asyncio.sleep(random.uniform(1.5, 3.5))
 
-    logger.info("Scraped %d ads (graphql) for %s/'%s'", len(out), country, search_term)
-    return out[:limit]
+    logger.info("Scraped %d ads (graphql) for %s/'%s'%s", len(out), country,
+                search_term or (f"page:{page_id}" if page_id else ""),
+                f" (meta_total={meta_total})" if meta_total is not None else "")
+    return out[:limit], meta_total
+
+
+async def fetch_page_ads(
+    page_id: str,
+    country: str = "ALL",
+    limit: int = 90,
+    max_pages: int = 4,
+) -> tuple[list[RawAd], int]:
+    """Brand deep-dive: pull one advertiser's FULL live ad catalog by page_id.
+
+    Returns (ads, live_ad_count). The count prefers Meta's own total for the
+    page-pinned search (the "~N results" the Ad Library UI shows); when the
+    response doesn't expose one, it falls back to the number of ads fetched —
+    a lower bound once the catalog exceeds `limit`.
+
+    `country="ALL"` asks for the brand's global footprint; if Meta rejects that
+    (0 results), we retry scoped to the given fallback country.
+    """
+    sess = await get_session()
+    if sess is None or not has_search_template():
+        return [], 0
+
+    ads, meta_total = await _fetch_graphql(sess, "ALL", "", limit, max_pages, page_id=page_id)
+    if not ads and country != "ALL":
+        ads, meta_total = await _fetch_graphql(sess, country, "", limit, max_pages, page_id=page_id)
+    live = meta_total if (meta_total is not None and meta_total >= len(ads)) else len(ads)
+    return ads, live
 
 
 async def fetch_ads(
@@ -439,7 +516,8 @@ async def fetch_ads(
 
     # Preferred path: replay the captured GraphQL request (the live endpoint).
     if has_search_template():
-        return await _fetch_graphql(sess, country, search_term, limit, max_pages)
+        ads, _total = await _fetch_graphql(sess, country, search_term, limit, max_pages)
+        return ads
 
     logger.warning(
         "No Ad Library search template captured — the legacy endpoint is dead (404). "

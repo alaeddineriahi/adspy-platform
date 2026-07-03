@@ -44,11 +44,11 @@ export default function AdminAuditPage() {
   if (error) return <p className="p-8 text-sm text-red-600">{error}</p>;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">
         Admin action log ({entries.length})
       </h3>
-      <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-50">
+      <div className="bg-white border border-[#e6e6e7] rounded-2xl divide-y divide-gray-50">
         {entries.map((e, i) => (
           <div key={i} className="flex items-start gap-3 px-4 py-3">
             <span className={`text-[10px] font-semibold px-2 py-1 rounded shrink-0 ${ACTION_COLOR[e.action] || "bg-gray-100 text-gray-600"}`}>

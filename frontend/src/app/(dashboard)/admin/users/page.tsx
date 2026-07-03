@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   }, [load]);
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Users {total > 0 && <span className="text-gray-400 font-normal">({total})</span>}</h2>
       </div>
@@ -75,7 +75,7 @@ export default function AdminUsersPage() {
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-[#e6e6e7] rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100 bg-gray-50">

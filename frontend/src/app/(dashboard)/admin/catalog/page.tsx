@@ -70,19 +70,19 @@ export default function AdminCatalogPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {overview && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
             <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
               <Database className="w-4 h-4" /> Catalog size
             </div>
-            <p className="text-2xl font-bold text-gray-900">{overview.total_ads}</p>
+            <p className="text-2xl font-black tracking-tight text-[#1d1d1f]">{overview.total_ads}</p>
             <p className="text-xs text-gray-400 mt-1">{overview.active_ads} active</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
             <p className="text-xs font-medium text-gray-500 mb-2">By format</p>
             {Object.entries(overview.by_format).map(([f, c]) => (
               <p key={f} className="text-sm text-gray-700 flex justify-between">
@@ -90,7 +90,7 @@ export default function AdminCatalogPage() {
               </p>
             ))}
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
             <p className="text-xs font-medium text-gray-500 mb-2">Top brands (scaling)</p>
             {overview.top_brands.slice(0, 4).map((b) => (
               <p key={b.advertiser_name} className="text-sm text-gray-700 truncate flex justify-between gap-2">
@@ -137,7 +137,7 @@ export default function AdminCatalogPage() {
           </button>
         </form>
 
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-[#e6e6e7] rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100 bg-gray-50">

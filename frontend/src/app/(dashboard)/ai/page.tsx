@@ -89,8 +89,8 @@ export default function AIToolsPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-2">
         <Film className="w-6 h-6" /> AI Video Script Generator
       </h2>
       <p className="text-sm text-gray-500 mb-6">
@@ -98,7 +98,7 @@ export default function AIToolsPage() {
         breakdown, and a CTA — built for Meta Reels & TikTok.
       </p>
 
-      <form onSubmit={generate} className="space-y-4 bg-white border border-gray-200 rounded-xl p-6">
+      <form onSubmit={generate} className="space-y-4 bg-white border border-[#e6e6e7] rounded-2xl p-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Product / Service</label>
           <input
@@ -218,7 +218,7 @@ export default function AIToolsPage() {
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Scene-by-scene</h3>
               <div className="space-y-3">
                 {script.scenes.map((s, i) => (
-                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 flex gap-4">
+                  <div key={i} className="bg-white border border-[#e6e6e7] rounded-2xl p-4 flex gap-4">
                     <div className="shrink-0 w-24">
                       <span className="text-xs font-mono text-gray-500">{s.timestamp}</span>
                       <span className="block mt-1 text-xs font-semibold text-blue-600">{s.beat}</span>
@@ -251,7 +251,7 @@ export default function AIToolsPage() {
               </div>
             )}
             {script.caption && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="bg-white border border-[#e6e6e7] rounded-2xl p-4">
                 <span className="text-xs font-semibold text-gray-400 uppercase">Caption</span>
                 <p className="text-sm text-gray-800 mt-1">{script.caption}</p>
               </div>

@@ -92,7 +92,7 @@ export default function AdDetailPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <Link href="/search" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-6">
         <ArrowLeft className="w-4 h-4" /> Back to search
       </Link>
@@ -137,7 +137,7 @@ export default function AdDetailPage() {
             )}
           </div>
 
-          <h1 className="text-xl font-bold text-gray-900 mb-1">{ad.advertiser_name}</h1>
+          <h1 className="text-xl font-black tracking-tight text-[#1d1d1f] mb-1">{ad.advertiser_name}</h1>
 
           <div className="flex items-center gap-4 text-sm text-gray-500 mb-6">
             <span className="flex items-center gap-1"><Globe className="w-4 h-4" />{ad.country}</span>
@@ -192,7 +192,7 @@ export default function AdDetailPage() {
 
       {/* AI Script output */}
       {script && !script.parse_error && (
-        <div className="mt-10 bg-white border border-gray-200 rounded-xl p-6">
+        <div className="mt-10 bg-white border border-[#e6e6e7] rounded-2xl p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <Zap className="w-5 h-5 text-blue-600" /> AI-generated script
           </h3>

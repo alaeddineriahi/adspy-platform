@@ -41,8 +41,8 @@ export default function BrandsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-6 flex items-center gap-2">
         <Eye className="w-6 h-6" /> Brand Spy
       </h2>
 
@@ -80,7 +80,7 @@ export default function BrandsPage() {
           <Link
             key={b.advertiser_id || b.advertiser_name}
             href={`/brands/${b.advertiser_id}`}
-            className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition"
+            className="bg-white border border-[#e6e6e7] rounded-2xl p-5 hover:shadow-md transition"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-gray-900 truncate">

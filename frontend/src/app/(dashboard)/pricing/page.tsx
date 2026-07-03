@@ -73,9 +73,9 @@ export default function PricingPage() {
   const currentPlan = usage?.plan ?? "free";
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-2">
+        <h2 className="text-3xl font-black tracking-tight text-[#1d1d1f] flex items-center justify-center gap-2">
           <CreditCard className="w-7 h-7" /> Plans & pricing
         </h2>
         <p className="text-sm text-gray-500 mt-2">

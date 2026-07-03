@@ -268,7 +268,7 @@ export default function MediaBuyerPage() {
       <div className="px-8 pt-6 pb-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] flex items-center gap-2">
               <Megaphone className="w-6 h-6" /> Media Buyer
             </h2>
             <p className="text-sm text-gray-500 mt-1">

@@ -37,8 +37,8 @@ export default function SavedPage() {
   const visible = ads.filter((a) => savedIds.has(a.id || a.ad_id));
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-2">
         <Bookmark className="w-6 h-6" /> Saved ads
       </h2>
       <p className="text-sm text-gray-500 mb-6">

@@ -5,13 +5,15 @@ import { UsageProvider } from "@/components/UsageProvider";
 import { CreditMeter } from "@/components/CreditMeter";
 import { AdminProvider } from "@/components/AdminProvider";
 import { SideNav } from "@/components/SideNav";
+import { MobileNav } from "@/components/MobileNav";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AdminProvider>
       <UsageProvider>
-        <div className="flex h-screen bg-[#fbfbfb]">
-          <aside className="w-64 bg-white border-r border-[#e6e6e7] flex flex-col">
+        <div className="flex h-screen flex-col lg:flex-row bg-[#fbfbfb]">
+          <MobileNav />
+          <aside className="hidden lg:flex w-64 bg-white border-r border-[#e6e6e7] flex-col">
             <div className="p-6">
               <Link href="/search" className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full holo-gradient" />

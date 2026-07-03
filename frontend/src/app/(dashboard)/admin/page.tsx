@@ -17,11 +17,11 @@ function Card({
   sub?: string;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+    <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
       <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
         <Icon className="w-4 h-4" /> {label}
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-2xl font-black tracking-tight text-[#1d1d1f]">{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   );
@@ -51,7 +51,7 @@ export default function AdminOverviewPage() {
   const { revenue, usage, catalog } = data;
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card
           icon={DollarSign}
@@ -88,7 +88,7 @@ export default function AdminOverviewPage() {
 
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Catalog by country</h3>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {Object.entries(catalog.per_country)
               .sort((a, b) => b[1] - a[1])

@@ -63,7 +63,7 @@ export default function SearchPage() {
   }, [platform, format, country, sort]);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1">Search ads</h2>
       <p className="text-sm text-[#6e6e73] mb-6">Winning creatives across 6 MENA markets — longest-running and hardest-scaling first.</p>
 
@@ -180,7 +180,7 @@ export default function SearchPage() {
               <button
                 onClick={() => doSearch(page - 1)}
                 disabled={page <= 1}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-30 hover:bg-gray-50"
+                className="px-4 py-2 text-sm border border-[#e6e6e7] rounded-full disabled:opacity-30 hover:border-[#1d1d1f] transition"
               >
                 Previous
               </button>
@@ -190,7 +190,7 @@ export default function SearchPage() {
               <button
                 onClick={() => doSearch(page + 1)}
                 disabled={page >= Math.ceil(total / 20)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-30 hover:bg-gray-50"
+                className="px-4 py-2 text-sm border border-[#e6e6e7] rounded-full disabled:opacity-30 hover:border-[#1d1d1f] transition"
               >
                 Next
               </button>

@@ -195,8 +195,8 @@ export default function AdminIngestionPage() {
   const configured = config?.scraping_configured;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-2">
         <Download className="w-6 h-6" /> Ad Ingestion
       </h2>
       <p className="text-sm text-gray-500 mb-6">
@@ -206,7 +206,7 @@ export default function AdminIngestionPage() {
 
       {/* System health strip */}
       {health && (
-        <div className="flex items-center gap-4 bg-white border border-gray-200 rounded-xl px-4 py-3 mb-6 text-xs">
+        <div className="flex items-center gap-4 bg-white border border-[#e6e6e7] rounded-2xl px-4 py-3 mb-6 text-xs">
           <span className="flex items-center gap-1 font-medium text-gray-500">
             <Activity className="w-3.5 h-3.5" /> System
           </span>
@@ -236,7 +236,7 @@ export default function AdminIngestionPage() {
       )}
 
       {/* Session status */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+      <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {configured ? (
@@ -346,7 +346,7 @@ export default function AdminIngestionPage() {
       )}
 
       {/* Run controls */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 space-y-4">
+      <div className="bg-white border border-[#e6e6e7] rounded-2xl p-6 mb-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-1">
             <label className="block text-xs font-medium text-gray-500 mb-1">Countries (comma)</label>
@@ -391,7 +391,7 @@ export default function AdminIngestionPage() {
 
       {/* Results */}
       {status && status.last_run.status !== "never_run" && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="bg-white border border-[#e6e6e7] rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700">
               Last run — <span className={running ? "text-blue-600" : "text-green-600"}>{status.last_run.status}</span>

@@ -74,13 +74,13 @@ export default function AdminUserDetailPage() {
   const isSelf = id === myId;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <Link href="/admin/users" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4">
         <ArrowLeft className="w-4 h-4" /> Users
       </Link>
 
       <div className="flex items-center justify-between mb-1">
-        <h2 className="text-xl font-bold text-gray-900">{data.user.email || data.user.id}</h2>
+        <h2 className="text-xl font-black tracking-tight text-[#1d1d1f]">{data.user.email || data.user.id}</h2>
         {data.user.role === "admin" && (
           <span className="text-xs font-semibold bg-gray-900 text-white px-2 py-1 rounded">ADMIN</span>
         )}
@@ -101,7 +101,7 @@ export default function AdminUserDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Plan & credits */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Plan & credits</h3>
           <p className="text-sm text-gray-600 mb-1">
             Current: <span className="font-medium text-gray-900">{data.subscription.plan}</span>
@@ -152,7 +152,7 @@ export default function AdminUserDetailPage() {
         </div>
 
         {/* Account controls */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Account</h3>
 
           <div className="mb-4">
@@ -240,7 +240,7 @@ export default function AdminUserDetailPage() {
       </div>
 
       {/* Payments */}
-      <div className="mt-6 bg-white border border-gray-200 rounded-xl p-5">
+      <div className="mt-6 bg-white border border-[#e6e6e7] rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Payment history</h3>
         {data.payments.length === 0 ? (
           <p className="text-sm text-gray-400">No payments yet.</p>
@@ -263,7 +263,7 @@ export default function AdminUserDetailPage() {
       </div>
 
       {/* Audit trail for this user */}
-      <div className="mt-6 bg-white border border-gray-200 rounded-xl p-5">
+      <div className="mt-6 bg-white border border-[#e6e6e7] rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Admin actions on this account</h3>
         {data.audit_log.length === 0 ? (
           <p className="text-sm text-gray-400">No admin actions yet.</p>

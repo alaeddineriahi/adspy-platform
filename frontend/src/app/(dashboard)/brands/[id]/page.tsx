@@ -41,7 +41,7 @@ export default function BrandDetailPage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <Link
         href="/brands"
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4"
@@ -60,7 +60,7 @@ export default function BrandDetailPage() {
       ) : (
         <>
           <div className="flex items-start justify-between gap-4 mb-2">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] flex items-center gap-2">
               <Eye className="w-6 h-6" /> {name}
             </h2>
             <span className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg shrink-0">

@@ -32,6 +32,7 @@ interface Dossier {
   market_map: {
     presence: Record<string, number>; open_mena: string[]; open_global: string[];
     saturation: string; saturation_meaning: string; brand_count: number;
+    verify_urls?: Record<string, string>;
   };
   competitors: { advertiser_name: string; advertiser_id?: string; total_variants: number; markets: string[]; max_heat: number }[];
   angles: string[];
@@ -68,7 +69,7 @@ export default function DossierPage() {
   const [error, setError] = useState("");
   const [outOfCredits, setOutOfCredits] = useState(false);
 
-  const cacheKey = `adspy_dossier_v3_${id}`; // v3: FR search terms for TN sources + expanded lab list
+  const cacheKey = `adspy_dossier_v4_${id}`; // v4: cross-language similarity + verify-live links + honest wording
 
   useEffect(() => {
     if (!id) return;
@@ -233,24 +234,45 @@ export default function DossierPage() {
               </h3>
               <p className="text-xs text-gray-500 mb-3">{dossier.market_map.saturation_meaning}</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
-                {Object.entries(dossier.market_map.presence).map(([c, n]) => (
-                  <span key={c} className="px-2 py-1 rounded-full text-[11px] font-bold bg-gray-900 text-white" title={`${n} similar ad(s) running`}>
-                    {c} · {n}
-                  </span>
-                ))}
+                {Object.entries(dossier.market_map.presence).map(([c, n]) => {
+                  const v = dossier.market_map.verify_urls?.[c];
+                  return v ? (
+                    <a key={c} href={v} target="_blank" rel="noopener noreferrer"
+                       className="px-2 py-1 rounded-full text-[11px] font-bold bg-gray-900 text-white hover:opacity-80 transition"
+                       title={`${n} winner(s) in our catalog — click to see ALL live ads in the Ad Library`}>
+                      {c} · {n} ↗
+                    </a>
+                  ) : (
+                    <span key={c} className="px-2 py-1 rounded-full text-[11px] font-bold bg-gray-900 text-white" title={`${n} winner(s) in our catalog`}>
+                      {c} · {n}
+                    </span>
+                  );
+                })}
               </div>
               {dossier.market_map.open_mena.length > 0 && (
                 <>
                   <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-1.5">
-                    🎯 Open markets — nobody runs this yet
+                    🎯 Open in our winners catalog — tap a market to verify live
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {dossier.market_map.open_mena.map((c) => (
-                      <span key={c} className="px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed border-emerald-300 text-emerald-700 bg-emerald-50">
-                        {c}
-                      </span>
-                    ))}
+                    {dossier.market_map.open_mena.map((c) => {
+                      const v = dossier.market_map.verify_urls?.[c];
+                      return v ? (
+                        <a key={c} href={v} target="_blank" rel="noopener noreferrer"
+                           className="px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition"
+                           title="No proven winner in our catalog here — click to check the live Ad Library yourself">
+                          {c} ↗
+                        </a>
+                      ) : (
+                        <span key={c} className="px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed border-emerald-300 text-emerald-700 bg-emerald-50">
+                          {c}
+                        </span>
+                      );
+                    })}
                   </div>
+                  <p className="text-[11px] text-gray-400 mt-2">
+                    &quot;Open&quot; = no proven winner in our catalog (top ~120 ads/market) — not a guarantee nobody sells it. The ↗ links open the live Facebook Ad Library search for that market.
+                  </p>
                 </>
               )}
             </div>

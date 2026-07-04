@@ -90,14 +90,38 @@ def _to_usd(amount: float, currency: str) -> float | None:
 
 
 def saturation(brand_count: int) -> tuple[str, str]:
-    """(level, plain-words meaning) from how many brands run this product."""
+    """(level, plain-words meaning) from how many brands run this product.
+
+    Wording is grounded in what we actually observe — OUR winners catalog
+    (the top ~120 ads per market), not the whole Ad Library. Absence here
+    means "no proven winner detected", never "nobody runs it" — that claim
+    burned us once and the verify-live links exist for exactly this reason.
+    """
     if brand_count <= 1:
-        return "wide_open", "Almost nobody runs this yet — first-mover territory."
+        return "wide_open", "No other winner detected in our catalog — verify live, then move fast."
     if brand_count <= 4:
-        return "heating_up", "A few brands are on it — validated, still room to win."
+        return "heating_up", "A few proven winners are on it — validated, still room to win."
     if brand_count <= 9:
-        return "crowded", "Plenty of competition — you'll need a stronger angle or a fresh market."
-    return "saturated", "Everyone runs this — only enter with a real edge (or pick the gap markets)."
+        return "crowded", "Plenty of proven competition — you'll need a stronger angle or a fresh market."
+    return "saturated", "Winners everywhere — only enter with a real edge (or pick the gap markets)."
+
+
+# Which language a buyer-facing Ad Library search should use, per market.
+_FR_MARKETS = {"TN", "MA", "DZ", "FR"}
+_AR_MARKETS = {"EG", "SA", "AE", "KW", "QA"}
+
+
+def _adlib_verify_url(country: str, llm: dict, fallback: str) -> str:
+    """Public Facebook Ad Library search for this product in one market —
+    the one-click 'is our catalog missing something?' truth check."""
+    if country in _FR_MARKETS:
+        term = llm.get("product_keywords_fr") or fallback
+    elif country in _AR_MARKETS:
+        term = llm.get("product_keywords_ar") or llm.get("product_keywords_fr") or fallback
+    else:
+        term = llm.get("sourcing_search_term") or fallback
+    return ("https://www.facebook.com/ads/library/?active_status=active&ad_type=all"
+            f"&country={country}&q={quote_plus(term)}&search_type=keyword_unordered&media_type=all")
 
 
 _SYSTEM = """You are a senior e-commerce product analyst for MENA dropshippers.
@@ -112,6 +136,8 @@ Reply with STRICT JSON only, exactly this shape:
  "est_supply_cost_usd_max": 6.0,
  "sourcing_search_term": "3-6 word english term to find it on AliExpress",
  "sourcing_search_term_fr": "3-6 word FRENCH term for Tunisian directories and Google (e.g. 'complément alimentaire minceur gélules')",
+ "product_keywords_fr": "2-4 word FRENCH product term as a buyer would say it (e.g. 'traitement mycose ongles')",
+ "product_keywords_ar": "2-4 word ARABIC product term (e.g. 'علاج فطريات الأظافر')",
  "is_supplement": false,
  "tunisia_manufacturable": false,
  "tunisia_manufacturing_note": "1 sentence: what kind of Tunisian maker could produce it (or empty string)",
@@ -174,31 +200,17 @@ def _tn_sources(term_fr: str, is_supplement: bool) -> list[dict]:
 
 
 async def generate_dossier(ad_id: str, ad: dict) -> dict:
-    """Assemble the full dossier for one indexed ad (LLM + ES + math)."""
-    es = get_es_client()
-    try:
-        similar = await find_similar_product_ads(es, ad_id)
-    except Exception as e:  # noqa: BLE001 — similarity is additive, not fatal
-        logger.warning("similar-product query failed for %s: %s", ad_id, e)
-        similar = {"similar_ads": 0, "brand_count": 1, "market_presence": {}, "top_brands": []}
-    finally:
-        await es.close()
+    """Assemble the full dossier for one indexed ad (LLM + ES + math).
 
-    # Market-gap map over everything we sweep. Presence counts include the ad itself.
-    presence = dict(similar["market_presence"])
-    for c in ad.get("countries") or [ad.get("country")]:
-        if c:
-            presence[c] = max(presence.get(c, 0), 1)
-    open_mena = [c for c in DEFAULT_COUNTRIES if not presence.get(c)]
-    open_global = [c for c in GLOBAL_COUNTRIES if not presence.get(c)]
-    brand_count = max(similar["brand_count"], 1)
-    sat_level, sat_meaning = saturation(brand_count)
-
+    The LLM runs FIRST: its per-language product keywords make the similarity
+    query cross-language (an AR-copy seller of the same product in TN must
+    count as competition for this FR-copy ad).
+    """
     price = extract_price(ad.get("copy_text", ""))
     price_local = {"amount": price[0], "currency": price[1].upper()} if price else None
     price_usd = _to_usd(*price) if price else None
 
-    # LLM: product identity + supply economics.
+    # LLM: product identity + supply economics + per-language keywords.
     price_line = (
         f"{price_local['amount']} {price_local['currency']} (~${price_usd} USD)"
         if price_usd and price_local else "not stated"
@@ -209,8 +221,6 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
         f"LANDING PAGE: {ad.get('landing_page') or '-'}\n"
         f"ADVERTISER: {ad.get('advertiser_name')}\n"
         f"SELL PRICE FOUND IN AD: {price_line}\n"
-        f"COMPETITION: {brand_count} brand(s) run this product across "
-        f"{', '.join(sorted(presence)) or 'one market'}.\n"
         "Return the JSON."
     )
     raw = await _call_llm(_SYSTEM, user_prompt)
@@ -219,6 +229,37 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
     except (ValueError, TypeError):
         m = re.search(r"\{.*\}", raw or "", re.DOTALL)
         llm = json.loads(m.group()) if m else {}
+
+    keywords = {
+        "fr": llm.get("product_keywords_fr"),
+        "ar": llm.get("product_keywords_ar"),
+        "en": llm.get("sourcing_search_term"),
+    }
+    es = get_es_client()
+    try:
+        similar = await find_similar_product_ads(es, ad_id, keywords=keywords)
+    except Exception as e:  # noqa: BLE001 — similarity is additive, not fatal
+        logger.warning("similar-product query failed for %s: %s", ad_id, e)
+        similar = {"similar_ads": 0, "brand_count": 1, "market_presence": {}, "top_brands": []}
+    finally:
+        await es.close()
+
+    # Market-gap map over everything we sweep. Presence counts include the ad
+    # itself. "Open" strictly means "no winner in OUR catalog" — each open
+    # market ships a live Ad Library link so the user can verify in one click.
+    presence = dict(similar["market_presence"])
+    for c in ad.get("countries") or [ad.get("country")]:
+        if c:
+            presence[c] = max(presence.get(c, 0), 1)
+    open_mena = [c for c in DEFAULT_COUNTRIES if not presence.get(c)]
+    open_global = [c for c in GLOBAL_COUNTRIES if not presence.get(c)]
+    brand_count = max(similar["brand_count"], 1)
+    sat_level, sat_meaning = saturation(brand_count)
+    fallback_term = llm.get("product_name") or ad.get("advertiser_name") or ""
+    verify_urls = {
+        c: _adlib_verify_url(c, llm, fallback_term)
+        for c in [*open_mena, *open_global, *presence]
+    }
 
     # Server-side margin math — honest, and never trusts LLM arithmetic.
     margin = None
@@ -295,12 +336,13 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
         "margin": margin,
         "pricing_hint": pricing_hint,
         "market_map": {
-            "presence": presence,           # {country: similar-ad count}
-            "open_mena": open_mena,         # swept MENA markets with NOBODY on it
+            "presence": presence,           # {country: similar-ad count in OUR catalog}
+            "open_mena": open_mena,         # swept MENA markets with no winner IN OUR CATALOG
             "open_global": open_global,
             "saturation": sat_level,
             "saturation_meaning": sat_meaning,
             "brand_count": brand_count,
+            "verify_urls": verify_urls,     # one-click live Ad Library check per market
         },
         "competitors": similar["top_brands"],
         "angles": llm.get("winning_angles") or [],

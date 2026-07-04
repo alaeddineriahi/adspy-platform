@@ -7,6 +7,8 @@ Index mapping optimized for ad search:
 - Sorting by days_running (proxy for profitability), first_seen
 """
 
+from typing import Optional
+
 from elasticsearch import AsyncElasticsearch
 from app.core.config import settings
 
@@ -340,26 +342,35 @@ async def get_top_brands(
     return {"results": brands, "total": len(brands)}
 
 
-async def find_similar_product_ads(es: AsyncElasticsearch, ad_id: str) -> dict:
+async def find_similar_product_ads(
+    es: AsyncElasticsearch,
+    ad_id: str,
+    keywords: Optional[dict] = None,
+) -> dict:
     """Who else is running this product? (saturation + market-gap signal)
 
-    more_like_this over the ad's copy/title finds the same product being run
-    by other advertisers (dropshippers copy each other's copy near-verbatim,
-    so text similarity IS product identity in this catalog). Returns the
-    competitive footprint: how many brands, in which markets, who's biggest.
+    more_like_this over the ad's copy/title finds near-verbatim copies (how
+    dropshippers actually copy each other) — but it's language-blind: the same
+    product sold with Arabic copy in TN never matches French copy from MA. So
+    the LLM's product keywords per language ({"fr":…, "ar":…, "en":…}) join as
+    extra should-clauses, making product identity cross-language.
     """
+    shoulds: list[dict] = [{
+        "more_like_this": {
+            "fields": ["copy_text", "advertiser_name"],
+            "like": [{"_index": "ads", "_id": ad_id}],
+            "min_term_freq": 1,
+            "min_doc_freq": 2,
+            "max_query_terms": 25,
+            "minimum_should_match": "30%",
+        }
+    }]
+    for kw in (keywords or {}).values():
+        if kw and isinstance(kw, str):
+            shoulds.append({"match": {"copy_text": {"query": kw, "minimum_should_match": "60%"}}})
     body = {
         "size": 0,
-        "query": {
-            "more_like_this": {
-                "fields": ["copy_text", "advertiser_name"],
-                "like": [{"_index": "ads", "_id": ad_id}],
-                "min_term_freq": 1,
-                "min_doc_freq": 2,
-                "max_query_terms": 25,
-                "minimum_should_match": "30%",
-            }
-        },
+        "query": {"bool": {"should": shoulds, "minimum_should_match": 1}},
         "aggs": {
             "brand_count": {"cardinality": {"field": "advertiser_id"}},
             "markets": {"terms": {"field": "countries", "size": 20}},

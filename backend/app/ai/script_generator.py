@@ -28,6 +28,20 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
 
 async def _call_groq(system_prompt: str, user_prompt: str) -> str:
     """Groq free tier — Llama 3.3 70B. 30 RPM, 6K TPM free."""
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 2048,
+    }
+    # json_object mode 400s unless the prompt literally contains "JSON"
+    # (OpenAI-compat rule) — only request it when it's allowed, so a prompt
+    # edit can never silently break every AI feature.
+    if "json" in (system_prompt + user_prompt).lower():
+        payload["response_format"] = {"type": "json_object"}
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -35,18 +49,21 @@ async def _call_groq(system_prompt: str, user_prompt: str) -> str:
                 "Authorization": f"Bearer {settings.GROQ_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.7,
-                "max_tokens": 2048,
-                "response_format": {"type": "json_object"},
-            },
+            json=payload,
             timeout=30,
         )
+        if resp.status_code == 400 and "response_format" in payload:
+            # belt & braces: retry once without forced-JSON mode
+            payload.pop("response_format")
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=30,
+            )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 

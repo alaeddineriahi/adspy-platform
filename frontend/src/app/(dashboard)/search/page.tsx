@@ -11,7 +11,7 @@ type Platform = "all" | "meta" | "tiktok";
 type AdFormat = "all" | "image" | "video" | "carousel";
 type SortBy = "best_performing" | "newest" | "longest_running" | "relevance";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");

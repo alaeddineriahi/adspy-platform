@@ -6,7 +6,9 @@
  * useAuth() and pass it here.
  */
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// 127.0.0.1, NOT localhost: on Windows "localhost" resolves to ::1 first and
+// the failed IPv6 connect adds ~200ms to EVERY request (measured 207ms vs 2ms).
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 type GetToken = () => Promise<string | null>;
 

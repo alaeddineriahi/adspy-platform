@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard, ScanSearch } from "lucide-react";
+import { Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard, ScanSearch, Radar } from "lucide-react";
 import { AdminNavLink } from "@/components/AdminNavLink";
 
 const navItems = [
+  { href: "/radar", label: "Trend Radar", icon: Radar },
   { href: "/search", label: "Search", icon: Search },
   { href: "/brands", label: "Brand Spy", icon: Eye },
   { href: "/intel", label: "Website Intel", icon: ScanSearch },

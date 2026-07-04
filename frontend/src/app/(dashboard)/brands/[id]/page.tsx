@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Eye, Loader2, Layers, Clock, TrendingUp, Radio, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, Eye, Loader2, Layers, Clock, TrendingUp, Radio, ArrowUpRight, BellRing, Bell } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
-import { API_URL } from "@/lib/api";
+import { API_URL, authFetch } from "@/lib/api";
 import { Ad } from "@/types";
 
 interface TrajectoryPoint {
@@ -15,11 +16,14 @@ interface TrajectoryPoint {
 
 export default function BrandDetailPage() {
   const { id } = useParams();
+  const { getToken } = useAuth();
   const [ads, setAds] = useState<Ad[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
   const [growth, setGrowth] = useState<number | null>(null);
+  const [watched, setWatched] = useState(false);
+  const [togglingWatch, setTogglingWatch] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -38,7 +42,35 @@ export default function BrandDetailPage() {
         setGrowth(d.growth ?? null);
       })
       .catch(() => setTrajectory([]));
-  }, [id]);
+    authFetch(getToken, "/api/brands/watchlist")
+      .then((r) => (r.ok ? r.json() : { brands: [] }))
+      .then((d: { brands: { brand_id: string }[] }) =>
+        setWatched((d.brands || []).some((b) => b.brand_id === id)),
+      )
+      .catch(() => {});
+  }, [id, getToken]);
+
+  const toggleWatch = async () => {
+    setTogglingWatch(true);
+    const next = !watched;
+    setWatched(next); // optimistic — revert on failure
+    try {
+      const res = await authFetch(
+        getToken,
+        next ? "/api/brands/watchlist" : "/api/brands/watchlist/remove",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brand_id: id, brand_name: ads[0]?.advertiser_name }),
+        },
+      );
+      if (!res.ok) setWatched(!next);
+    } catch {
+      setWatched(!next);
+    } finally {
+      setTogglingWatch(false);
+    }
+  };
 
   const name = ads[0]?.advertiser_name || "Brand";
   const liveNow = trajectory.length
@@ -81,6 +113,19 @@ export default function BrandDetailPage() {
               <Eye className="w-6 h-6" /> {name}
             </h2>
             <span className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={toggleWatch}
+                disabled={togglingWatch}
+                title={watched ? "Stop watching — no more radar alerts for this brand" : "Watch this brand — its moves show up on your Trend Radar"}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold border transition ${
+                  watched
+                    ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+                    : "bg-white text-gray-700 border-[#e6e6e7] hover:border-[#1d1d1f]"
+                }`}
+              >
+                {watched ? <BellRing className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+                {watched ? "Watching" : "Watch"}
+              </button>
               {liveNow > 0 && (
                 <span
                   className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-bold text-white bg-gradient-to-r from-rose-500 to-orange-500"

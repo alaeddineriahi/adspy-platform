@@ -21,6 +21,12 @@ from app.core.database import async_session
 from app.core.elasticsearch import get_es_client, setup_index
 from app.models.brand import BrandSnapshot
 from app.ingestion.scraper import RawAd, fetch_ads, fetch_page_ads
+from app.ingestion.radar import (
+    detect_ad_events,
+    brand_escalation_event,
+    brand_expansion_event,
+    record_events,
+)
 from app.ingestion.scoring import score_ad, compute_heat
 from app.ingestion.spend import estimate_spend
 from app.ingestion.eu_reach import EU_COUNTRIES, fetch_eu_reach, apply_reach_to_doc
@@ -256,22 +262,25 @@ async def _build_doc(ad: RawAd, s, sem: asyncio.Semaphore) -> dict:
     return doc
 
 
-async def _merge_existing(es, docs: list[dict]) -> None:
-    """Preserve cross-market identity on upsert.
+async def _merge_existing(es, docs: list[dict]) -> dict[str, dict]:
+    """Preserve cross-market identity on upsert; return the PRIOR state.
 
     `es.index(id=ad_id)` replaces the whole doc, so an ad seen first in SA and
     later by the KW sweep used to *become* a KW ad. Instead: keep the original
     `country` (first market we saw it in) and grow the `countries` list — the
     catalog compounds instead of churning.
+
+    The returned {ad_id: previous _source} map is the last look at pre-upsert
+    state — Trend Radar diffs against it (momentum flips, trend arrivals).
     """
     ids = [d["ad_id"] for d in docs]
     if not ids:
-        return
+        return {}
     try:
         res = await es.mget(index="ads", body={"ids": ids})
     except Exception as e:  # noqa: BLE001 — merge is best-effort, never fail a sweep
         logger.warning("countries merge skipped (mget failed): %s", e)
-        return
+        return {}
     existing = {d["_id"]: d.get("_source", {}) for d in res.get("docs", []) if d.get("found")}
     for doc in docs:
         old = existing.get(doc["ad_id"])
@@ -283,9 +292,14 @@ async def _merge_existing(es, docs: list[dict]) -> None:
             merged.add(old["country"])
             doc["country"] = old["country"]  # first-seen market stays primary
         doc["countries"] = sorted(merged)
+    return existing
 
 
-async def _deep_dive_pass(es, final: list[tuple[RawAd, object]]) -> dict:
+async def _deep_dive_pass(
+    es,
+    final: list[tuple[RawAd, object]],
+    radar_events: Optional[list[dict]] = None,
+) -> dict:
     """Brand deep-dive: for the hardest-scaling brands this sweep surfaced,
     pull their FULL live catalog by page_id.
 
@@ -342,9 +356,18 @@ async def _deep_dive_pass(es, final: list[tuple[RawAd, object]]) -> dict:
             continue
         stats["brands"] += 1
 
-        # Snapshot the observation (trajectory history). Best-effort.
+        # Snapshot the observation (trajectory history). Best-effort. The
+        # previous snapshot (fetched before inserting) feeds the radar's
+        # brand-escalation signal.
+        prev_live = 0
         try:
             async with async_session() as db:
+                prev_live = await db.scalar(
+                    select(BrandSnapshot.live_ads)
+                    .where(BrandSnapshot.page_id == seed_ad.page_id)
+                    .order_by(BrandSnapshot.captured_at.desc())
+                    .limit(1)
+                ) or 0
                 db.add(BrandSnapshot(
                     page_id=seed_ad.page_id, page_name=seed_ad.page_name,
                     country="ALL", live_ads=live,
@@ -352,6 +375,10 @@ async def _deep_dive_pass(es, final: list[tuple[RawAd, object]]) -> dict:
                 await db.commit()
         except Exception as e:  # noqa: BLE001
             logger.warning("brand snapshot insert failed for %s: %s", seed_ad.page_name, e)
+        if radar_events is not None:
+            esc = brand_escalation_event(seed_ad.page_id, seed_ad.page_name, prev_live, live)
+            if esc:
+                radar_events.append(esc)
 
         # The brand's catalog ads join the index through the SAME winner filter
         # as sweep ads. The ALL-countries fetch tags ads "ALL"; attribute them
@@ -369,10 +396,18 @@ async def _deep_dive_pass(es, final: list[tuple[RawAd, object]]) -> dict:
         for d in docs:
             d["brand_live_ads"] = live
             d["source"] = "brand_deepdive"
-        await _merge_existing(es, docs)
+        dive_prior = await _merge_existing(es, docs)
         for d in docs:
             await es.index(index="ads", id=d["ad_id"], document=d)
         stats["catalog_indexed"] += len(docs)
+
+        # Radar: a RE-dived brand shipping a batch of fresh winners is a signal
+        # (first dives are excluded — everything is "new" then).
+        if radar_events is not None and prev_live > 0:
+            fresh = sum(1 for d in docs if d["ad_id"] not in dive_prior)
+            exp = brand_expansion_event(seed_ad.page_id, seed_ad.page_name, seed_ad.country, fresh)
+            if exp:
+                radar_events.append(exp)
 
         # Stamp the live-ad count on the brand's PREVIOUSLY indexed ads too, so
         # Brand Spy's "N ads live" covers the whole footprint.
@@ -526,7 +561,8 @@ async def _run_sweep(
         await setup_index(es)
         # An ad re-seen from another market keeps its identity (country list
         # grows) instead of being overwritten as a fresh single-country doc.
-        await _merge_existing(es, docs)
+        # The prior-state map feeds Trend Radar's diffing below.
+        prior = await _merge_existing(es, docs)
         for doc in docs:
             await es.index(index="ads", id=doc["ad_id"], document=doc)
             indexed += 1
@@ -534,10 +570,16 @@ async def _run_sweep(
             await es.indices.refresh(index="ads")
 
         # Brand deep-dive: full catalogs + live-ad counts for the top scalers.
+        radar_events: list[dict] = []
         try:
-            deepdive_stats = await _deep_dive_pass(es, final)
+            deepdive_stats = await _deep_dive_pass(es, final, radar_events)
         except Exception as e:  # noqa: BLE001 — never fail the sweep on the extra pass
             logger.warning("Brand deep-dive pass failed: %s", e)
+
+        # Trend Radar: diff this sweep against prior state → market signals.
+        core_markets = set(_as_list(getattr(settings, "INGEST_COUNTRIES", None), DEFAULT_COUNTRIES))
+        radar_events.extend(detect_ad_events(prior, docs, core_markets))
+        radar_written = await record_events(radar_events)
 
         # 6) Freshness pass: re-indexed ads got a new indexed_at above; anything
         # still-active that no sweep has re-seen in INGEST_STALE_DAYS is
@@ -576,6 +618,7 @@ async def _run_sweep(
         "marked_inactive": marked_inactive,
         "brands_deepdived": deepdive_stats["brands"],
         "catalog_indexed": deepdive_stats["catalog_indexed"],
+        "radar_events": radar_written,
         "per_country": per_country_count,
         "top": [
             {"advertiser": ad.page_name, "country": ad.country,

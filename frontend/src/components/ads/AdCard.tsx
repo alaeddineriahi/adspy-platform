@@ -1,7 +1,7 @@
 "use client";
 
 import { Ad } from "@/types";
-import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem, CircleDollarSign } from "lucide-react";
+import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem, CircleDollarSign, Package } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useSaved } from "@/components/SavedProvider";
@@ -179,6 +179,13 @@ export function AdCard({ ad }: { ad: Ad }) {
           className="flex-1 text-center py-2 text-sm font-semibold bg-[#1d1d1f] text-white rounded-full hover:bg-black transition"
         >
           View details
+        </Link>
+        <Link
+          href={`/dossier/${ad.id || ad.ad_id}`}
+          title="Product dossier — margin, market gaps, sourcing"
+          className="flex items-center justify-center w-9 h-9 border border-[#e6e6e7] rounded-full hover:border-[#1d1d1f] transition"
+        >
+          <Package className="w-4 h-4 text-gray-600" />
         </Link>
         <Link
           href={`/mediabuyer?ad=${ad.id || ad.ad_id}`}

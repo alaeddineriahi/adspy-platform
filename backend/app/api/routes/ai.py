@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.ai.brand_intel import analyze_website, FetchError
+from app.ai.dossier import generate_dossier
 from app.ai.script_generator import (
     generate_script,
     generate_copy,
@@ -55,6 +56,44 @@ class AnalyzeRequest(BaseModel):
 
 class WebsiteRequest(BaseModel):
     url: str
+
+
+class DossierRequest(BaseModel):
+    ad_id: str
+
+
+DOSSIER_COST = 2  # one LLM synthesis + the assembled intelligence around it
+
+
+@router.post("/dossier")
+async def api_dossier(req: DossierRequest, uid: str = Depends(get_user_id)):
+    """Product Dossier: the complete business-in-a-box for one winning ad —
+    product identity, margin math, saturation, market-gap map, sourcing."""
+    # 404 before anything costs money.
+    es = get_es_client()
+    try:
+        ad_data = await es.get(index="ads", id=req.ad_id)
+        ad = ad_data["_source"]
+    except Exception:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    finally:
+        await es.close()
+
+    # Pre-check the full price so a low-credit user never triggers the LLM;
+    # the real spend happens only after the dossier succeeds.
+    usage = await credits_usage(uid)
+    if usage["credits_remaining"] < DOSSIER_COST:
+        raise HTTPException(status_code=402, detail={
+            "error": "out_of_credits",
+            "message": f"A dossier costs {DOSSIER_COST} credits and you have "
+                       f"{usage['credits_remaining']} left this month. Upgrade to keep going.",
+        })
+    try:
+        result = await generate_dossier(req.ad_id, ad)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Dossier failed — try again in a moment.")
+    credits = await spend_credits(uid, DOSSIER_COST)
+    return {**result, "credits": credits}
 
 
 @router.post("/analyze-website")

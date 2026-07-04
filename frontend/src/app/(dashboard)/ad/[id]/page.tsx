@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft, Bookmark, ExternalLink, Clock, Globe, Zap,
-  Copy, CheckCheck, Loader2, Calendar
+  Copy, CheckCheck, Loader2, Calendar, Package
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
@@ -182,10 +182,17 @@ export default function AdDetailPage() {
 
           {/* Actions */}
           <div className="flex flex-col gap-3">
+            <Link
+              href={`/dossier/${id}`}
+              className="btn-holo w-full py-3 text-sm text-center"
+            >
+              <Package className="w-4 h-4" />
+              Full product dossier — margin, gaps, sourcing
+            </Link>
             <button
               onClick={generateScript}
               disabled={generating}
-              className="btn-holo w-full py-3 text-sm disabled:opacity-50"
+              className="w-full py-3 text-sm flex items-center justify-center gap-2 border border-[#1d1d1f] rounded-full font-semibold hover:bg-gray-50 transition disabled:opacity-50"
             >
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               Generate AI script

@@ -340,6 +340,63 @@ async def get_top_brands(
     return {"results": brands, "total": len(brands)}
 
 
+async def find_similar_product_ads(es: AsyncElasticsearch, ad_id: str) -> dict:
+    """Who else is running this product? (saturation + market-gap signal)
+
+    more_like_this over the ad's copy/title finds the same product being run
+    by other advertisers (dropshippers copy each other's copy near-verbatim,
+    so text similarity IS product identity in this catalog). Returns the
+    competitive footprint: how many brands, in which markets, who's biggest.
+    """
+    body = {
+        "size": 0,
+        "query": {
+            "more_like_this": {
+                "fields": ["copy_text", "advertiser_name"],
+                "like": [{"_index": "ads", "_id": ad_id}],
+                "min_term_freq": 1,
+                "min_doc_freq": 2,
+                "max_query_terms": 25,
+                "minimum_should_match": "30%",
+            }
+        },
+        "aggs": {
+            "brand_count": {"cardinality": {"field": "advertiser_id"}},
+            "markets": {"terms": {"field": "countries", "size": 20}},
+            "top_brands": {
+                "terms": {"field": "advertiser_name.keyword", "size": 6,
+                          "order": {"variants": "desc"}},
+                "aggs": {
+                    "variants": {"sum": {"field": "variant_count"}},
+                    "advertiser_id": {"terms": {"field": "advertiser_id", "size": 1}},
+                    "in_markets": {"terms": {"field": "countries", "size": 13}},
+                    "max_heat": {"max": {"field": "heat"}},
+                },
+            },
+        },
+    }
+    result = await es.search(index="ads", body=body)
+    aggs = result.get("aggregations", {})
+    return {
+        "similar_ads": result["hits"]["total"]["value"],
+        "brand_count": int(aggs.get("brand_count", {}).get("value", 0)),
+        "market_presence": {
+            b["key"]: b["doc_count"] for b in aggs.get("markets", {}).get("buckets", [])
+        },
+        "top_brands": [
+            {
+                "advertiser_name": b["key"],
+                "advertiser_id": (b["advertiser_id"]["buckets"][0]["key"]
+                                  if b["advertiser_id"]["buckets"] else None),
+                "total_variants": int(b["variants"]["value"] or 0),
+                "markets": [c["key"] for c in b["in_markets"]["buckets"]],
+                "max_heat": round(b["max_heat"]["value"] or 0, 1),
+            }
+            for b in aggs.get("top_brands", {}).get("buckets", [])
+        ],
+    }
+
+
 async def get_trending_ads(
     es: AsyncElasticsearch,
     country: str = None,

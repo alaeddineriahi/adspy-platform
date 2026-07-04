@@ -5,35 +5,44 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Fenki — the AdSpy mascot (white fennec, holo-gradient ears, red chachia).
  *
- * Assets live in /public/mascot/ on an OFF-white (~#f3f3f3) background, no
- * alpha. The seamless look = brightness clip (bg → pure white) + multiply
- * blend (pure white → invisible) + an elliptical edge mask.
+ * Assets sit on an OFF-white (~#f0f0f0) background with no alpha, and a
+ * gradient bar is baked into the video's floor. Every CSS-level fix
+ * (mix-blend-multiply + filter) failed in the wild for two reasons:
+ *   1. playing <video> gets promoted to a hardware overlay that ignores CSS,
+ *   2. the edge-fade mask creates an ISOLATED stacking context, inside which
+ *      mix-blend-mode blends against nothing — so the box came back.
  *
- * WHY A CANVAS: applying those treatments straight to a <video> works only
- * until playback starts — Windows browsers promote playing videos to a
- * hardware overlay that IGNORES CSS blend modes/filters/masks (the "fixed
- * for an instant, then the box came back" bug). So a hidden <video> only
- * decodes, a <canvas> mirrors its frames (cropping the gradient bar baked
- * into the video's floor at the source), and the CSS lives on the canvas —
- * a normal element the compositor can never bypass.
- *
- * - prefers-reduced-motion / video error → the still image (same treatments;
- *   images never get overlay-promoted, so CSS is reliable there)
- * - expression poses (hot/thinking/empty/celebrate) via `pose`; missing
- *   PNGs fall back to the hero still.
+ * So everything now happens in canvas pixels, immune to both:
+ *   - a hidden <video> only decodes; the canvas mirrors its frames
+ *   - the bottom 24% of each video frame (the gradient bar) is cropped
+ *     at the SOURCE rect
+ *   - the background is SAMPLED from a corner pixel and a brightness factor
+ *     is computed so that bg becomes exactly the page color — the background
+ *     isn't hidden, it's converted into the page
+ *   - stills (poses, reduced-motion, fallback) run through the same canvas
+ *     pipeline for a consistent look
+ * The elliptical mask stays purely as a soft edge fade (no blending logic).
  */
 export type MascotPose = "hero" | "hot" | "thinking" | "empty" | "celebrate";
 
-// Fade all edges; swallow any residual frame border.
 const EDGE_MASK = {
-  maskImage: "radial-gradient(ellipse 72% 68% at 50% 44%, black 58%, transparent 92%)",
-  WebkitMaskImage: "radial-gradient(ellipse 72% 68% at 50% 44%, black 58%, transparent 92%)",
+  maskImage: "radial-gradient(ellipse 74% 70% at 50% 44%, black 60%, transparent 94%)",
+  WebkitMaskImage: "radial-gradient(ellipse 74% 70% at 50% 44%, black 60%, transparent 94%)",
 } as React.CSSProperties;
 
-const MELT = "mix-blend-multiply [filter:brightness(1.06)]";
+const PAGE_LUMA = 251;      // #fbfbfb — what the asset background must become
+const CROP_BOTTOM = 0.24;   // video floor slice holding the baked-in gradient bar
 
-// Bottom slice of the video frame to discard (the baked-in gradient bar).
-const CROP_BOTTOM = 0.14;
+/** brightness factor that maps the sampled background onto the page color */
+function bgScale(ctx: CanvasRenderingContext2D): number {
+  try {
+    const d = ctx.getImageData(8, 8, 1, 1).data;
+    const bg = (d[0] + d[1] + d[2]) / 3;
+    return bg > 170 && bg < 254 ? PAGE_LUMA / bg : 1;
+  } catch {
+    return 1;
+  }
+}
 
 export function Mascot({
   size = 240,
@@ -48,22 +57,56 @@ export function Mascot({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [playing, setPlaying] = useState(false);
   const [videoOk, setVideoOk] = useState(true);
 
   const still = pose === "hero" ? "/mascot/fenki-hero.webp" : `/mascot/fenki-${pose}.png`;
-  const wantVideo = animated && pose === "hero" && videoOk;
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wantVideo = animated && pose === "hero" && videoOk && !reducedMotion;
 
+  // Still-image path (poses, reduced motion, video fallback) — same pipeline.
+  useEffect(() => {
+    if (wantVideo) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !ctx) return;
+    let cancelled = false;
+
+    const render = (src: string, isFallback = false) => {
+      const img = new Image();
+      img.onload = () => {
+        if (cancelled) return;
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx.filter = "none";
+        ctx.drawImage(img, 0, 0);
+        const scale = bgScale(ctx);
+        if (scale !== 1 && "filter" in ctx) {
+          ctx.filter = `brightness(${scale})`;
+          ctx.drawImage(img, 0, 0);
+          ctx.filter = "none";
+        }
+      };
+      img.onerror = () => {
+        if (!cancelled && !isFallback) render("/mascot/fenki-hero.webp", true);
+      };
+      img.src = src;
+    };
+    render(still);
+    return () => { cancelled = true; };
+  }, [wantVideo, still]);
+
+  // Video path: hidden decoder → per-frame canvas mirror.
   useEffect(() => {
     if (!wantVideo) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!video || !canvas || !ctx) return;
 
     let raf = 0;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    let scale: number | null = null;
 
     const draw = () => {
       if (video.readyState >= 2 && video.videoWidth) {
@@ -73,25 +116,24 @@ export function Mascot({
           canvas.width = sw;
           canvas.height = sh;
         }
+        if (scale === null) {
+          ctx.filter = "none";
+          ctx.drawImage(video, 0, 0, sw, sh, 0, 0, sw, sh);
+          scale = bgScale(ctx);
+        }
+        if (scale !== 1 && "filter" in ctx) ctx.filter = `brightness(${scale})`;
         ctx.drawImage(video, 0, 0, sw, sh, 0, 0, sw, sh);
+        ctx.filter = "none";
       }
       raf = requestAnimationFrame(draw);
     };
 
-    const onPlaying = () => {
-      setPlaying(true);
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(draw);
-    };
     const onError = () => setVideoOk(false);
-
-    video.addEventListener("playing", onPlaying);
     video.addEventListener("error", onError);
-    video.play().catch(() => setVideoOk(false));
+    video.play().then(() => { raf = requestAnimationFrame(draw); }).catch(onError);
 
     return () => {
       cancelAnimationFrame(raf);
-      video.removeEventListener("playing", onPlaying);
       video.removeEventListener("error", onError);
       video.pause();
     };
@@ -102,7 +144,6 @@ export function Mascot({
       className={`relative mx-auto select-none pointer-events-none ${className}`}
       style={{ width: size, height: size * 0.82 }}
     >
-      {/* decoder only — never visible, never overlay-promoted into view */}
       {wantVideo && (
         <video
           ref={videoRef}
@@ -118,28 +159,13 @@ export function Mascot({
           <source src="/mascot/fenki-idle-loop.mp4" type="video/mp4" />
         </video>
       )}
-
-      <div className="absolute inset-0" style={EDGE_MASK}>
-        {wantVideo && (
-          <canvas
-            ref={canvasRef}
-            className={`w-full h-full object-cover ${MELT} ${playing ? "block" : "hidden"}`}
-            aria-hidden
-          />
-        )}
-        {/* still: shown until the canvas has frames, and for reduced-motion/fallback */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={still}
-          alt="Fenki, the AdSpy fennec"
-          className={`w-full h-full object-cover ${MELT} ${playing && wantVideo ? "hidden" : "block"}`}
-          onError={(e) => {
-            if (!e.currentTarget.src.endsWith("fenki-hero.webp")) {
-              e.currentTarget.src = "/mascot/fenki-hero.webp";
-            }
-          }}
-        />
-      </div>
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full object-cover"
+        style={EDGE_MASK}
+        role="img"
+        aria-label="Fenki, the AdSpy fennec"
+      />
     </div>
   );
 }

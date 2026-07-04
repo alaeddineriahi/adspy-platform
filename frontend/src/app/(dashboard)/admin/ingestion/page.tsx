@@ -18,11 +18,14 @@ interface Config {
   template_captured?: boolean;
   schedule_enabled: boolean;
   interval_hours: number;
-  countries: string[];
+  countries: string[];          // the FULL unified sweep scope (core + global)
   search_terms: string[];
   min_days_running: number;
   min_variants: number;
   max_per_country: number;
+  global_enabled?: boolean;
+  global_countries?: string[];  // subset of `countries` with the lower cap
+  global_max_per_country?: number;
 }
 interface TopAd {
   advertiser: string;
@@ -39,6 +42,8 @@ interface Stats {
   dropped_low_perf: number;
   indexed: number;
   marked_inactive?: number;
+  brands_deepdived?: number;
+  catalog_indexed?: number;
   per_country: Record<string, number>;
   top: TopAd[];
 }
@@ -266,12 +271,38 @@ export default function AdminIngestionPage() {
           </button>
         </div>
         {config && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
-            <Meta label="Schedule" value={config.schedule_enabled ? `every ${config.interval_hours}h` : "manual"} />
-            <Meta label="Min days running" value={String(config.min_days_running)} />
-            <Meta label="Min variants" value={String(config.min_variants)} />
-            <Meta label="Max / country" value={String(config.max_per_country)} />
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
+              <Meta label="Schedule" value={config.schedule_enabled ? `every ${config.interval_hours}h, all markets` : "manual"} />
+              <Meta label="Min days running" value={String(config.min_days_running)} />
+              <Meta label="Min variants" value={String(config.min_variants)} />
+              <Meta
+                label="Max / country"
+                value={
+                  config.global_max_per_country
+                    ? `${config.max_per_country} · 🌍 ${config.global_max_per_country}`
+                    : String(config.max_per_country)
+                }
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-3 text-xs">
+              <span className="text-gray-400 mr-1">Sweep covers {config.countries.length} markets:</span>
+              {config.countries.map((c) => {
+                const isGlobal = config.global_countries?.includes(c);
+                return (
+                  <span
+                    key={c}
+                    title={isGlobal ? "Global trend market (lower per-country cap)" : "Core market"}
+                    className={`px-2 py-0.5 rounded-full font-semibold ${
+                      isGlobal ? "bg-indigo-50 text-indigo-600" : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {isGlobal ? "🌍 " : ""}{c}
+                  </span>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {!configured && (
@@ -377,7 +408,9 @@ export default function AdminIngestionPage() {
             />
           </div>
         </div>
-        <p className="text-xs text-gray-400">Leave blank to use the built-in MENA defaults.</p>
+        <p className="text-xs text-gray-400">
+          Leave blank to sweep every market — MENA core + 🌍 global trends — in one run.
+        </p>
         <button
           onClick={run}
           disabled={starting || running}
@@ -403,7 +436,7 @@ export default function AdminIngestionPage() {
 
           {stats ? (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-3 mb-6">
                 <Stat label="Fetched" value={stats.fetched} />
                 <Stat label="Unique" value={stats.unique} />
                 <Stat label="Kept" value={stats.kept} highlight />
@@ -411,7 +444,22 @@ export default function AdminIngestionPage() {
                 <Stat label="Low-perf cut" value={stats.dropped_low_perf} />
                 <Stat label="Indexed" value={stats.indexed} highlight />
                 <Stat label="Gone stale" value={stats.marked_inactive ?? 0} />
+                <Stat label="Brands dived" value={stats.brands_deepdived ?? 0} />
+                <Stat label="Catalog added" value={stats.catalog_indexed ?? 0} />
               </div>
+
+              {stats.per_country && Object.keys(stats.per_country).length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-6 text-xs">
+                  <span className="text-gray-400 mr-1">Kept per market:</span>
+                  {Object.entries(stats.per_country)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([c, n]) => (
+                      <span key={c} className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-semibold">
+                        {c} {n}
+                      </span>
+                    ))}
+                </div>
+              )}
 
               {stats.top.length > 0 && (
                 <div>

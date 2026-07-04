@@ -28,11 +28,38 @@ from app.ingestion.media import mirror_to_r2, r2_enabled
 
 logger = logging.getLogger("adspy.ingest")
 
-# Core markets — the user's region, swept every INGEST_INTERVAL_HOURS.
+# Core markets — the user's region.
 DEFAULT_COUNTRIES = ["TN", "MA", "DZ", "EG", "SA", "AE", "KW", "QA"]
 # Trend markets — where e-com trends originate; what scales there reaches MENA
-# months later. Swept separately (INGEST_GLOBAL_*) at a lighter cadence.
+# months later. Swept together with the core (ONE sweep covers everything);
+# they only differ by a lower per-country cap (INGEST_GLOBAL_MAX_PER_COUNTRY).
 GLOBAL_COUNTRIES = ["US", "CA", "GB", "AU", "FR"]
+
+
+def _global_set() -> set[str]:
+    return set(_as_list(getattr(settings, "INGEST_GLOBAL_COUNTRIES", None), GLOBAL_COUNTRIES))
+
+
+def sweep_countries() -> list[str]:
+    """The full default sweep scope: core markets + global trend markets.
+
+    One list, one sweep, one schedule — a rebuilt feed or a scheduled run always
+    covers every market the product sells. Global markets can still be switched
+    off wholesale via INGEST_GLOBAL_ENABLED.
+    """
+    core = _as_list(getattr(settings, "INGEST_COUNTRIES", None), DEFAULT_COUNTRIES)
+    if not bool(getattr(settings, "INGEST_GLOBAL_ENABLED", True)):
+        return core
+    glob = _as_list(getattr(settings, "INGEST_GLOBAL_COUNTRIES", None), GLOBAL_COUNTRIES)
+    return core + [c for c in glob if c not in core]
+
+
+def cap_for(country: str, core_cap: int) -> int:
+    """Per-market keep cap: trend markets get a lower one (coverage over depth —
+    what matters there is spotting the trend, not exhausting the market)."""
+    if country in _global_set():
+        return min(core_cap, int(getattr(settings, "INGEST_GLOBAL_MAX_PER_COUNTRY", 60)))
+    return core_cap
 
 # Discovery is about finding WINNING PRODUCTS, not matching discount words — and
 # not the app/game/marketplace noise that a blank "browse everything" pulls in.
@@ -384,7 +411,7 @@ async def ingest_best_performing(
     Returns stats: {fetched, unique, kept, dropped_spam, dropped_low_perf,
     indexed, per_country, top}.
     """
-    countries = list(countries) if countries else _as_list(getattr(settings, "INGEST_COUNTRIES", None), DEFAULT_COUNTRIES)
+    countries = list(countries) if countries else sweep_countries()
     # Explicit terms (API/env) override for ALL countries; otherwise each
     # country gets its own language-appropriate category set.
     explicit_terms = (
@@ -461,12 +488,13 @@ async def _run_sweep(
         else:
             kept.append((ad, s))
 
-    # 4) Rank by score, cap per country (keep only the very best per market).
+    # 4) Rank by score, cap per country (keep only the very best per market —
+    # trend markets get their own, lower cap).
     kept.sort(key=lambda t: t[1].score, reverse=True)
     per_country_count: dict[str, int] = {}
     final: list[tuple[RawAd, object]] = []
     for ad, s in kept:
-        if per_country_count.get(ad.country, 0) >= max_per_country:
+        if per_country_count.get(ad.country, 0) >= cap_for(ad.country, max_per_country):
             continue
         per_country_count[ad.country] = per_country_count.get(ad.country, 0) + 1
         final.append((ad, s))

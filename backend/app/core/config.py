@@ -71,11 +71,10 @@ class Settings(BaseSettings):
     INGEST_INTERVAL_HOURS: float = 12
 
     # Global trend markets (US/EU winners reach MENA months later — trend
-    # arbitrage). Separate, lighter cadence so the extra request volume
-    # doesn't burn the FB session.
+    # arbitrage). Swept in the SAME run as the core markets (one sweep covers
+    # everything); they only differ by a lower per-country keep cap.
     INGEST_GLOBAL_ENABLED: bool = True
     INGEST_GLOBAL_COUNTRIES: str = ""       # default: US,CA,GB,AU,FR
-    INGEST_GLOBAL_INTERVAL_HOURS: float = 72
     INGEST_GLOBAL_MAX_PER_COUNTRY: int = 60
 
     # Sweep scope (comma-separated strings in .env, or use defaults)

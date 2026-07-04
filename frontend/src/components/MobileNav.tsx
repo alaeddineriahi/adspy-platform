@@ -22,7 +22,7 @@ export function MobileNav() {
     <>
       <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-white/90 backdrop-blur border-b border-[#e6e6e7] px-4 py-3">
         <Link href="/search" className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full holo-gradient" />
+          <span className="radar-live-dot w-2.5 h-2.5 rounded-full holo-gradient" />
           <span className="text-lg font-black tracking-tight text-[#1d1d1f]">AdSpy</span>
         </Link>
         <button

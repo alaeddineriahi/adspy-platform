@@ -15,8 +15,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <MobileNav />
           <aside className="hidden lg:flex w-64 bg-white border-r border-[#e6e6e7] flex-col">
             <div className="p-6">
-              <Link href="/search" className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full holo-gradient" />
+              <Link href="/search" className="group flex items-center gap-2">
+                <span className="radar-live-dot w-2.5 h-2.5 rounded-full holo-gradient" />
                 <span className="text-xl font-black tracking-tight text-[#1d1d1f]">AdSpy</span>
               </Link>
             </div>

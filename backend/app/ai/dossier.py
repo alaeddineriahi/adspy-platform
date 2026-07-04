@@ -139,6 +139,7 @@ Reply with STRICT JSON only, exactly this shape:
  "product_keywords_fr": "2-4 word FRENCH product term as a buyer would say it (e.g. 'traitement mycose ongles')",
  "product_keywords_ar": "2-4 word ARABIC product term (e.g. 'علاج فطريات الأظافر')",
  "is_supplement": false,
+ "is_cosmetic": false,
  "tunisia_manufacturable": false,
  "tunisia_manufacturing_note": "1 sentence: what kind of Tunisian maker could produce it (or empty string)",
  "winning_angles": ["angle 1", "angle 2", "angle 3"],
@@ -147,6 +148,7 @@ Reply with STRICT JSON only, exactly this shape:
 }
 Supply cost = realistic AliExpress/1688 unit price band for this kind of product.
 is_supplement = true for food supplements, vitamins, slimming/hair/skin ingestibles.
+is_cosmetic = true for topical beauty/care products (creams, serums, oils, soaps).
 tunisia_manufacturable = true when Tunisian industry realistically produces this
 category (supplements/parapharma via contract labs, textiles & clothing, leather,
 olive-oil cosmetics, packaged food, furniture/wood, simple plastic goods) —
@@ -155,18 +157,21 @@ No markdown, no commentary — JSON only."""
 
 # 🇹🇳 Local sourcing — the edge China can't match: no customs, 1-week restock,
 # COD-friendly cash cycles, and "made in Tunisia" as a marketing angle.
-# Tunisian laboratories that make / façonnent food supplements. Links are
-# FRENCH Google searches (Tunisia searches in FR/AR, never EN) the user
-# verifies — we never claim a specific MOQ or certification.
+# VERIFIED Tunisian façonniers (real companies, direct sites — researched
+# 2026-07-04). MOQ/certifications still the user's job to confirm.
 _TN_SUPPLEMENT_LABS = [
-    {"name": "Medicka", "note": "Laboratoire tunisien de compléments alimentaires — façonnage & marque blanche"},
-    {"name": "Laboratoires MédiS", "note": "Grand laboratoire pharmaceutique tunisien — façonnage"},
-    {"name": "TERIAK", "note": "Façonnier pharma & parapharmacie"},
-    {"name": "Laboratoires SAIPH", "note": "Fabricant tunisien, lignes para/compléments"},
-    {"name": "Adwya", "note": "Laboratoire établi, parapharmacie & compléments"},
-    {"name": "UNIMED", "note": "Production qualité export, lignes stériles & para"},
-    {"name": "Opalia Pharma (Recordati)", "note": "Laboratoire pharmaceutique tunisien majeur"},
-    {"name": "Philadelphia Pharma", "note": "Laboratoire tunisien, pharma & parapharmacie"},
+    {"name": "Medicka Lab", "url": "https://medickalab.com/",
+     "note": "Façonnier leader de compléments alimentaires (depuis 2010, Nabeul) — FSSC 22000, gélules/comprimés, marque blanche A→Z"},
+    {"name": "Galevit Laboratoires", "url": "https://www.galevit.tn/",
+     "note": "Phytothérapie & compléments alimentaires fabriqués en Tunisie"},
+    {"name": "Vibraforce", "url": "https://vibraforce.com/",
+     "note": "Façonnier compléments bio — marque blanche, petites quantités (idéal pour tester)"},
+]
+_TN_COSMETIC_LABS = [
+    {"name": "Heisenberg Lab", "url": "https://www.heisenberglab.com/",
+     "note": "Laboratoire de fabrication cosmétique en Tunisie — façonnage & marque blanche"},
+    {"name": "Vibraforce", "url": "https://vibraforce.com/",
+     "note": "Façonnage de cosmétiques bio/naturels — marque blanche, petites quantités"},
 ]
 
 
@@ -174,19 +179,22 @@ def _google(q: str) -> str:
     return f"https://www.google.com/search?q={quote_plus(q)}"
 
 
-def _tn_sources(term_fr: str, is_supplement: bool) -> list[dict]:
-    """Tunisian manufacturer leads: curated labs for supplements + B2B
-    directories for everything else. `term_fr` MUST be French — Tunisian
+def _tn_sources(term_fr: str, is_supplement: bool, is_cosmetic: bool) -> list[dict]:
+    """Tunisian manufacturer leads: verified labs per category + B2B
+    directories for everything. `term_fr` MUST be French — Tunisian
     directories and Google give nothing useful for English queries."""
     sources: list[dict] = []
     if is_supplement:
-        sources += [
-            {**lab, "url": _google(f"{lab['name']} Tunisie façonnage complément alimentaire")}
-            for lab in _TN_SUPPLEMENT_LABS
-        ]
+        sources += _TN_SUPPLEMENT_LABS
         sources.append({
             "name": "Autres façonniers 🇹🇳", "note": "Recherche Google — fabricants de compléments en Tunisie",
             "url": _google(f"façonnage complément alimentaire Tunisie fabricant {term_fr}"),
+        })
+    if is_cosmetic:
+        sources += [lab for lab in _TN_COSMETIC_LABS if lab["name"] not in {s["name"] for s in sources}]
+        sources.append({
+            "name": "Autres labos cosmétiques 🇹🇳", "note": "Recherche Google — façonniers cosmétiques en Tunisie",
+            "url": _google(f"façonnage cosmétique Tunisie laboratoire marque blanche {term_fr}"),
         })
     sources += [
         {"name": "Kompass Tunisie", "note": "Annuaire B2B des fabricants tunisiens",
@@ -223,12 +231,19 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
         f"SELL PRICE FOUND IN AD: {price_line}\n"
         "Return the JSON."
     )
-    raw = await _call_llm(_SYSTEM, user_prompt)
-    try:
-        llm = json.loads(raw)
-    except (ValueError, TypeError):
-        m = re.search(r"\{.*\}", raw or "", re.DOTALL)
-        llm = json.loads(m.group()) if m else {}
+    llm: dict = {}
+    for _attempt in range(2):  # one retry — a flaky LLM reply must not 502 a paid feature
+        raw = await _call_llm(_SYSTEM, user_prompt)
+        try:
+            llm = json.loads(raw)
+        except (ValueError, TypeError):
+            m = re.search(r"\{.*\}", raw or "", re.DOTALL)
+            try:
+                llm = json.loads(m.group()) if m else {}
+            except (ValueError, TypeError):
+                llm = {}
+        if llm.get("product_name"):
+            break
 
     keywords = {
         "fr": llm.get("product_keywords_fr"),
@@ -294,8 +309,9 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
     # for MENA ads is usually already FR/AR) — never the English China term.
     term_fr = llm.get("sourcing_search_term_fr") or llm.get("product_name") or term
     is_supplement = bool(llm.get("is_supplement"))
-    # Supplements are always locally manufacturable (contract labs exist).
-    tn_feasible = is_supplement or bool(llm.get("tunisia_manufacturable"))
+    is_cosmetic = bool(llm.get("is_cosmetic"))
+    # Supplements & cosmetics are always locally manufacturable (façonniers exist).
+    tn_feasible = is_supplement or is_cosmetic or bool(llm.get("tunisia_manufacturable"))
     sourcing = {
         "search_term": term,
         "aliexpress_url": f"https://www.aliexpress.com/w/wholesale-{quote_plus(term)}.html" if term else None,
@@ -311,7 +327,7 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
                     or ("Supplements can be produced by Tunisian contract labs (façonnage) — "
                         "local stock, no customs, and a 🇹🇳 'made in Tunisia' trust angle."
                         if is_supplement else ""),
-            "tunisia_sources": _tn_sources(term_fr, is_supplement) if tn_feasible else [],
+            "tunisia_sources": _tn_sources(term_fr, is_supplement, is_cosmetic) if tn_feasible else [],
         },
     }
 
@@ -349,4 +365,6 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
         "risk_notes": llm.get("risk_notes"),
         "verdict_line": llm.get("verdict_line"),
         "sourcing": sourcing,
+        # Per-language product terms — the UI's "spy similar winners" deep link.
+        "keywords": {k: v for k, v in keywords.items() if v},
     }

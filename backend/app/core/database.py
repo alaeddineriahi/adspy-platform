@@ -24,7 +24,7 @@ async def get_db():
 
 async def init_db():
     """Create all tables. Safe to call on startup."""
-    from app.models import saved, billing, watchlist, admin, brand, radar  # noqa: F401  (register models)
+    from app.models import saved, billing, watchlist, admin, brand, radar, dossier  # noqa: F401  (register models)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -50,6 +50,9 @@ interface Dossier {
       tunisia_sources: { name: string; note?: string; url?: string }[];
     };
   };
+  keywords?: { fr?: string; ar?: string; en?: string };
+  cached?: boolean;
+  credits_charged?: number;
 }
 
 const SAT_STYLES: Record<string, { label: string; cls: string }> = {
@@ -69,7 +72,7 @@ export default function DossierPage() {
   const [error, setError] = useState("");
   const [outOfCredits, setOutOfCredits] = useState(false);
 
-  const cacheKey = `adspy_dossier_v4_${id}`; // v4: cross-language similarity + verify-live links + honest wording
+  const cacheKey = `adspy_dossier_v5_${id}`; // v5: verified TN labs, cosmetics tier, spy-similar link, server cache
 
   useEffect(() => {
     if (!id) return;
@@ -149,7 +152,7 @@ export default function DossierPage() {
           </p>
           <button onClick={generate} disabled={loading} className="btn-holo px-6 py-3 text-sm disabled:opacity-50">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
-            {loading ? "Compiling the dossier…" : "Generate dossier · 2 credits"}
+            {loading ? "Compiling the dossier…" : "Generate dossier · 2 credits (1 if recently compiled)"}
           </button>
           {error && (
             <div className="mt-4 flex items-center justify-center gap-3">
@@ -275,6 +278,23 @@ export default function DossierPage() {
                   </p>
                 </>
               )}
+              {dossier.market_map.open_global.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                  <span className="text-[11px] text-gray-400">🌍 Trend markets:</span>
+                  {dossier.market_map.open_global.map((c) => {
+                    const v = dossier.market_map.verify_urls?.[c];
+                    return v ? (
+                      <a key={c} href={v} target="_blank" rel="noopener noreferrer"
+                         className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-dashed border-gray-300 text-gray-500 hover:border-gray-500 transition"
+                         title="Check the live Ad Library in this trend market">
+                        {c} ↗
+                      </a>
+                    ) : (
+                      <span key={c} className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-dashed border-gray-300 text-gray-500">{c}</span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -387,6 +407,14 @@ export default function DossierPage() {
           <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5 fade-up" style={{ ["--delay" as string]: "600ms" }}>
             <h3 className="text-sm font-bold text-[#1d1d1f] mb-3">Launch it</h3>
             <div className="flex flex-wrap gap-2.5">
+              {(dossier.keywords?.fr || dossier.keywords?.en) && (
+                <Link
+                  href={`/search?q=${encodeURIComponent(dossier.keywords.fr || dossier.keywords.en!)}`}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition"
+                >
+                  <Target className="w-4 h-4" /> Spy all similar winners
+                </Link>
+              )}
               <Link href={`/ad/${id}`} className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
                 <Zap className="w-4 h-4" /> Generate my ad pack
               </Link>
@@ -397,6 +425,7 @@ export default function DossierPage() {
           </div>
 
           <p className="text-[11px] text-gray-400 text-center pb-4">
+            {dossier.cached ? "⚡ Served from recent intelligence (1 credit). " : ""}
             Supply costs and margins are estimates (typical AliExpress pricing + ~18% COD/shipping fees) — validate with your supplier before scaling.
           </p>
         </div>

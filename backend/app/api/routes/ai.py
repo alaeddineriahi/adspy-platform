@@ -9,8 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
+from datetime import datetime, timedelta, timezone
+
 from app.ai.brand_intel import analyze_website, FetchError
 from app.ai.dossier import generate_dossier
+from app.core.database import async_session
+from app.models.dossier import DossierCache
 from app.ai.script_generator import (
     generate_script,
     generate_copy,
@@ -62,13 +66,19 @@ class DossierRequest(BaseModel):
     ad_id: str
 
 
-DOSSIER_COST = 2  # one LLM synthesis + the assembled intelligence around it
+DOSSIER_COST = 2          # fresh compilation (LLM + assembly)
+DOSSIER_COST_CACHED = 1   # served from the server cache (no LLM)
+DOSSIER_CACHE_DAYS = 7
 
 
 @router.post("/dossier")
 async def api_dossier(req: DossierRequest, uid: str = Depends(get_user_id)):
     """Product Dossier: the complete business-in-a-box for one winning ad —
-    product identity, margin math, saturation, market-gap map, sourcing."""
+    product identity, margin math, saturation, market-gap map, sourcing.
+
+    Dossiers are cached server-side per ad for DOSSIER_CACHE_DAYS: cache hits
+    are instant, LLM-flake-proof, and cost 1 credit instead of 2.
+    """
     # 404 before anything costs money.
     es = get_es_client()
     try:
@@ -79,21 +89,46 @@ async def api_dossier(req: DossierRequest, uid: str = Depends(get_user_id)):
     finally:
         await es.close()
 
-    # Pre-check the full price so a low-credit user never triggers the LLM;
+    # Fresh-enough cached dossier?
+    cached_result = None
+    try:
+        async with async_session() as db:
+            row = await db.get(DossierCache, req.ad_id)
+        if row and row.created_at and row.created_at > (
+            datetime.now(timezone.utc) - timedelta(days=DOSSIER_CACHE_DAYS)
+        ):
+            cached_result = row.data
+    except Exception:  # noqa: BLE001 — cache is an optimization, never a blocker
+        pass
+
+    cost = DOSSIER_COST_CACHED if cached_result else DOSSIER_COST
+
+    # Pre-check the price so a low-credit user never triggers the LLM;
     # the real spend happens only after the dossier succeeds.
     usage = await credits_usage(uid)
-    if usage["credits_remaining"] < DOSSIER_COST:
+    if usage["credits_remaining"] < cost:
         raise HTTPException(status_code=402, detail={
             "error": "out_of_credits",
-            "message": f"A dossier costs {DOSSIER_COST} credits and you have "
+            "message": f"A dossier costs {cost} credit{'s' if cost > 1 else ''} and you have "
                        f"{usage['credits_remaining']} left this month. Upgrade to keep going.",
         })
-    try:
-        result = await generate_dossier(req.ad_id, ad)
-    except Exception:
-        raise HTTPException(status_code=502, detail="Dossier failed — try again in a moment.")
-    credits = await spend_credits(uid, DOSSIER_COST)
-    return {**result, "credits": credits}
+
+    if cached_result:
+        result = cached_result
+    else:
+        try:
+            result = await generate_dossier(req.ad_id, ad)
+        except Exception:
+            raise HTTPException(status_code=502, detail="Dossier failed — try again in a moment.")
+        try:
+            async with async_session() as db:
+                await db.merge(DossierCache(ad_id=req.ad_id, data=result))
+                await db.commit()
+        except Exception:  # noqa: BLE001
+            pass
+
+    credits = await spend_credits(uid, cost)
+    return {**result, "credits": credits, "cached": bool(cached_result), "credits_charged": cost}
 
 
 @router.post("/analyze-website")

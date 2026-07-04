@@ -62,7 +62,7 @@ export default function Home() {
         <div className="relative">
           {/* Fenki — the fennec that watches the market for you */}
           <div className="fade-up" style={delay(0)}>
-            <Mascot size={230} className="-mb-4" />
+            <Mascot size={440} className="-mb-8 -mt-6" />
           </div>
 
           {/* Gradient badge pill */}

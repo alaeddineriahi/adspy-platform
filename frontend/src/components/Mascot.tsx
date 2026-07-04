@@ -5,18 +5,32 @@ import { useState } from "react";
 /**
  * Fenki — the AdSpy mascot (white fennec, holo-gradient ears, red chachia).
  *
- * Assets live in /public/mascot/. The renders sit on a WHITE background (no
- * alpha), so `mix-blend-multiply` melts them into the near-white (#fbfbfb)
- * page: white pixels become invisible, the character stays intact.
+ * Assets live in /public/mascot/. The renders sit on an OFF-white background
+ * (~#f3f3f3, no alpha), so three layers make them seamless on the page:
+ *   1. brightness boost clips the near-white bg to pure white,
+ *   2. mix-blend-multiply makes pure white invisible on the page,
+ *   3. an edge mask + bottom fade melt the frame borders (and hide the
+ *      gradient bar baked into the video's floor) into the page.
  *
- * - default: autoplaying idle loop (webm first, mp4 fallback), poster = still
- * - prefers-reduced-motion: the still image only (Tailwind motion-reduce)
+ * - default: autoplaying idle loop (webm -> mp4), poster = still
+ * - prefers-reduced-motion: the still only (Tailwind motion-reduce)
  * - video error (codec/404): falls back to the still
+ * - Edge/Chrome hover media overlays (PiP etc.) are suppressed.
  *
  * Expression stills (hot/thinking/empty/celebrate) plug in via `pose` once
- * generated — they're optional and default to the hero still if missing.
+ * generated — missing PNGs gracefully fall back to the hero still.
  */
 export type MascotPose = "hero" | "hot" | "thinking" | "empty" | "celebrate";
+
+// One generous elliptical mask fades every edge of the frame — hides the
+// video's hard border AND the gradient bar baked into its floor, while the
+// character (centered, slightly high) stays fully opaque.
+const EDGE_MASK = {
+  maskImage: "radial-gradient(ellipse 72% 68% at 50% 42%, black 58%, transparent 92%)",
+  WebkitMaskImage: "radial-gradient(ellipse 72% 68% at 50% 42%, black 58%, transparent 92%)",
+} as React.CSSProperties;
+
+const MELT = "mix-blend-multiply [filter:brightness(1.06)]";
 
 export function Mascot({
   size = 240,
@@ -36,37 +50,42 @@ export function Mascot({
   return (
     <div
       className={`relative mx-auto select-none pointer-events-none ${className}`}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size * 0.82 }}
     >
-      {showVideo && (
-        <video
-          className="w-full h-full object-cover mix-blend-multiply motion-reduce:hidden"
-          autoPlay
-          muted
-          loop
-          playsInline
-          poster="/mascot/fenki-hero.webp"
-          aria-hidden
-          onError={() => setVideoOk(false)}
-        >
-          <source src="/mascot/fenki-idle-loop.webm" type="video/webm" />
-          <source src="/mascot/fenki-idle-loop.mp4" type="video/mp4" />
-        </video>
-      )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={still}
-        alt="Fenki, the AdSpy fennec"
-        className={`w-full h-full object-cover mix-blend-multiply ${
-          showVideo ? "hidden motion-reduce:block" : "block"
-        }`}
-        onError={(e) => {
-          // missing expression PNG → fall back to the hero still
-          if (!e.currentTarget.src.endsWith("fenki-hero.webp")) {
-            e.currentTarget.src = "/mascot/fenki-hero.webp";
-          }
-        }}
-      />
+      <div className="absolute inset-0" style={EDGE_MASK}>
+        {showVideo && (
+          <video
+            className={`w-full h-full object-cover motion-reduce:hidden ${MELT}`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            controlsList="nodownload noplaybackrate noremoteplayback"
+            poster="/mascot/fenki-hero.webp"
+            aria-hidden
+            onError={() => setVideoOk(false)}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <source src="/mascot/fenki-idle-loop.webm" type="video/webm" />
+            <source src="/mascot/fenki-idle-loop.mp4" type="video/mp4" />
+          </video>
+        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={still}
+          alt="Fenki, the AdSpy fennec"
+          className={`w-full h-full object-cover ${MELT} ${
+            showVideo ? "hidden motion-reduce:block" : "block"
+          }`}
+          onError={(e) => {
+            // missing expression PNG → fall back to the hero still
+            if (!e.currentTarget.src.endsWith("fenki-hero.webp")) {
+              e.currentTarget.src = "/mascot/fenki-hero.webp";
+            }
+          }}
+        />
+      </div>
     </div>
   );
 }

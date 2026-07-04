@@ -37,7 +37,18 @@ interface Dossier {
   angles: string[];
   risk_notes?: string;
   verdict_line?: string;
-  sourcing: { search_term?: string; aliexpress_url?: string; alibaba_url?: string };
+  sourcing: {
+    search_term?: string;
+    aliexpress_url?: string;
+    alibaba_url?: string;
+    made_in_china_url?: string;
+    local?: {
+      feasible: boolean;
+      is_supplement: boolean;
+      note?: string;
+      tunisia_sources: { name: string; note?: string; url?: string }[];
+    };
+  };
 }
 
 const SAT_STYLES: Record<string, { label: string; cls: string }> = {
@@ -57,7 +68,7 @@ export default function DossierPage() {
   const [error, setError] = useState("");
   const [outOfCredits, setOutOfCredits] = useState(false);
 
-  const cacheKey = `adspy_dossier_${id}`;
+  const cacheKey = `adspy_dossier_v2_${id}`; // v2: sourcing gained made-in-china + 🇹🇳 local block
 
   useEffect(() => {
     if (!id) return;
@@ -290,22 +301,70 @@ export default function DossierPage() {
             )}
           </div>
 
-          {/* Launch bar */}
+          {/* Source it */}
           <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5 fade-up" style={{ ["--delay" as string]: "540ms" }}>
-            <h3 className="text-sm font-bold text-[#1d1d1f] mb-3">Launch it</h3>
+            <h3 className="text-sm font-bold text-[#1d1d1f] mb-3 flex items-center gap-1.5">
+              <ShoppingCart className="w-4 h-4 text-emerald-600" /> Source it
+            </h3>
+
+            {/* 🇹🇳 Local manufacturing — the edge China can't match */}
+            {dossier.sourcing.local?.feasible && (
+              <div className="mb-4 rounded-xl border border-red-100 bg-gradient-to-br from-red-50 to-white p-4">
+                <p className="text-sm font-bold text-[#1d1d1f] mb-1">
+                  🇹🇳 Make it in Tunisia{dossier.sourcing.local.is_supplement ? " — contract labs (façonnage)" : ""}
+                </p>
+                {dossier.sourcing.local.note && (
+                  <p className="text-xs text-gray-600 mb-3">{dossier.sourcing.local.note}</p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {dossier.sourcing.local.tunisia_sources.map((s) => (
+                    <a
+                      key={s.name}
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start justify-between gap-2 px-3 py-2 rounded-lg border border-[#e6e6e7] bg-white hover:border-[#1d1d1f] transition"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold text-[#1d1d1f] truncate">{s.name}</span>
+                        {s.note && <span className="block text-[11px] text-gray-500">{s.note}</span>}
+                      </span>
+                      <ExternalLink className="w-3 h-3 text-gray-400 shrink-0 mt-1" />
+                    </a>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-2">
+                  Local = no customs, ~1-week restock, COD-friendly cash cycle, and &quot;fabriqué en Tunisie&quot; as a trust angle. Verify MOQ &amp; certifications directly.
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2.5">
               {dossier.sourcing.aliexpress_url && (
                 <a href={dossier.sourcing.aliexpress_url} target="_blank" rel="noopener noreferrer"
                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
-                  <ShoppingCart className="w-4 h-4" /> Source on AliExpress <ExternalLink className="w-3 h-3 text-gray-400" />
+                  <ShoppingCart className="w-4 h-4" /> AliExpress (test units) <ExternalLink className="w-3 h-3 text-gray-400" />
                 </a>
               )}
               {dossier.sourcing.alibaba_url && (
                 <a href={dossier.sourcing.alibaba_url} target="_blank" rel="noopener noreferrer"
                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
-                  <ShoppingCart className="w-4 h-4" /> Alibaba bulk <ExternalLink className="w-3 h-3 text-gray-400" />
+                  <ShoppingCart className="w-4 h-4" /> Alibaba (bulk) <ExternalLink className="w-3 h-3 text-gray-400" />
                 </a>
               )}
+              {dossier.sourcing.made_in_china_url && (
+                <a href={dossier.sourcing.made_in_china_url} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
+                  <ShoppingCart className="w-4 h-4" /> Made-in-China <ExternalLink className="w-3 h-3 text-gray-400" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Launch bar */}
+          <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5 fade-up" style={{ ["--delay" as string]: "600ms" }}>
+            <h3 className="text-sm font-bold text-[#1d1d1f] mb-3">Launch it</h3>
+            <div className="flex flex-wrap gap-2.5">
               <Link href={`/ad/${id}`} className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
                 <Zap className="w-4 h-4" /> Generate my ad pack
               </Link>

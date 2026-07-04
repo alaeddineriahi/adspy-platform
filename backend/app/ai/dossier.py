@@ -111,12 +111,55 @@ Reply with STRICT JSON only, exactly this shape:
  "est_supply_cost_usd_min": 2.5,
  "est_supply_cost_usd_max": 6.0,
  "sourcing_search_term": "3-6 word english term to find it on AliExpress",
+ "is_supplement": false,
+ "tunisia_manufacturable": false,
+ "tunisia_manufacturing_note": "1 sentence: what kind of Tunisian maker could produce it (or empty string)",
  "winning_angles": ["angle 1", "angle 2", "angle 3"],
  "risk_notes": "1-2 sentences: seasonality, shipping fragility, saturation, ad-policy risks",
  "verdict_line": "one punchy sentence: should a seller move on this now, and how"
 }
 Supply cost = realistic AliExpress/1688 unit price band for this kind of product.
+is_supplement = true for food supplements, vitamins, slimming/hair/skin ingestibles.
+tunisia_manufacturable = true when Tunisian industry realistically produces this
+category (supplements/parapharma via contract labs, textiles & clothing, leather,
+olive-oil cosmetics, packaged food, furniture/wood, simple plastic goods) —
+false for consumer electronics, complex gadgets, and molded technical products.
 No markdown, no commentary — JSON only."""
+
+# 🇹🇳 Local sourcing — the edge China can't match: no customs, 1-week restock,
+# COD-friendly cash cycles, and "made in Tunisia" as a marketing angle.
+_TN_SUPPLEMENT_LABS = [
+    {"name": "Laboratoires MédiS", "note": "Major Tunisian pharma lab — contract manufacturing (façonnage)"},
+    {"name": "TERIAK", "note": "Contract manufacturer for pharma & parapharma products"},
+    {"name": "Laboratoires SAIPH", "note": "Tunisian manufacturer with para/supplement lines"},
+    {"name": "Adwya", "note": "Established lab, parapharma & supplement capable"},
+    {"name": "UNIMED", "note": "Export-grade production, sterile & para lines"},
+]
+
+
+def _google(q: str) -> str:
+    return f"https://www.google.com/search?q={quote_plus(q)}"
+
+
+def _tn_sources(term: str, is_supplement: bool) -> list[dict]:
+    """Tunisian manufacturer leads: curated labs for supplements + B2B
+    directories for everything else. Links are searches/directories the user
+    verifies — we never claim a specific MOQ or certification."""
+    sources: list[dict] = []
+    if is_supplement:
+        sources += [
+            {**lab, "url": _google(f"{lab['name']} Tunisie façonnage complément alimentaire")}
+            for lab in _TN_SUPPLEMENT_LABS
+        ]
+    sources += [
+        {"name": "Kompass Tunisie", "note": "B2B directory of Tunisian manufacturers",
+         "url": f"https://tn.kompass.com/searchCompanies?text={quote_plus(term)}"},
+        {"name": "Europages Tunisie", "note": "Tunisian suppliers & exporters by product",
+         "url": f"https://www.europages.fr/entreprises/Tunisie/{quote_plus(term)}.html"},
+        {"name": "Tunisie Industrie (APII)", "note": "Official industrial database — search by activity",
+         "url": "http://www.tunisieindustrie.nat.tn/fr/dbi.asp"},
+    ]
+    return sources
 
 
 async def generate_dossier(ad_id: str, ad: dict) -> dict:
@@ -195,10 +238,26 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
             }
 
     term = llm.get("sourcing_search_term") or llm.get("product_name") or ""
+    is_supplement = bool(llm.get("is_supplement"))
+    # Supplements are always locally manufacturable (contract labs exist).
+    tn_feasible = is_supplement or bool(llm.get("tunisia_manufacturable"))
     sourcing = {
         "search_term": term,
         "aliexpress_url": f"https://www.aliexpress.com/w/wholesale-{quote_plus(term)}.html" if term else None,
         "alibaba_url": f"https://www.alibaba.com/trade/search?SearchText={quote_plus(term)}" if term else None,
+        "made_in_china_url": (
+            f"https://www.made-in-china.com/products-search/hot-china-products/{quote_plus(term)}.html"
+            if term else None
+        ),
+        "local": {
+            "feasible": tn_feasible,
+            "is_supplement": is_supplement,
+            "note": (llm.get("tunisia_manufacturing_note") or "").strip()
+                    or ("Supplements can be produced by Tunisian contract labs (façonnage) — "
+                        "local stock, no customs, and a 🇹🇳 'made in Tunisia' trust angle."
+                        if is_supplement else ""),
+            "tunisia_sources": _tn_sources(term, is_supplement) if tn_feasible else [],
+        },
     }
 
     return {

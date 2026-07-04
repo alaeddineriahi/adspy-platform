@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CSSProperties } from "react";
 import { ArrowRight, Search, Megaphone, Zap, Eye } from "lucide-react";
 import { Hero3D } from "@/components/Hero3D";
+import { Mascot } from "@/components/Mascot";
 import { Reveal } from "@/components/Reveal";
 
 const features = [
@@ -59,25 +60,30 @@ export default function Home() {
         <div className="orb float-slow w-[300px] h-[300px] top-64 left-1/3" style={{ ...delay(3000), background: "#f05427", opacity: 0.18 }} />
 
         <div className="relative">
+          {/* Fenki — the fennec that watches the market for you */}
+          <div className="fade-up" style={delay(0)}>
+            <Mascot size={230} className="-mb-4" />
+          </div>
+
           {/* Gradient badge pill */}
-          <div className="fade-up inline-flex holo-ring rounded-full mb-7" style={delay(0)}>
+          <div className="fade-up inline-flex holo-ring rounded-full mb-7" style={delay(100)}>
             <span className="rounded-full bg-[#fbfbfb] px-5 py-1.5 text-sm font-semibold holo-text">
               Ad intelligence for MENA
             </span>
           </div>
 
-          <h1 className="fade-up text-5xl md:text-7xl font-black tracking-tight leading-[1.05] mb-6 text-balance" style={delay(120)}>
+          <h1 className="fade-up text-5xl md:text-7xl font-black tracking-tight leading-[1.05] mb-6 text-balance" style={delay(200)}>
             Find the ads that
             <br />
             print money.
           </h1>
-          <p className="fade-up text-lg md:text-xl text-[#6e6e73] mb-10 max-w-2xl mx-auto leading-relaxed" style={delay(240)}>
+          <p className="fade-up text-lg md:text-xl text-[#6e6e73] mb-10 max-w-2xl mx-auto leading-relaxed" style={delay(320)}>
             AdSpy watches the Meta Ad Library so you don&apos;t have to — surfacing the
             long-running, scaling winners in your market, then helping you launch your own
             with an AI media buyer.
           </p>
 
-          <div className="fade-up flex items-center justify-center gap-4" style={delay(360)}>
+          <div className="fade-up flex items-center justify-center gap-4" style={delay(440)}>
             <Link href="/sign-up" className="btn-holo px-8 py-3.5 text-base">
               Start spying free <ArrowRight className="w-4 h-4" />
             </Link>
@@ -88,7 +94,7 @@ export default function Home() {
               See the library
             </Link>
           </div>
-          <p className="fade-up mt-5 text-sm text-[#6e6e73]" style={delay(480)}>
+          <p className="fade-up mt-5 text-sm text-[#6e6e73]" style={delay(560)}>
             Free plan included · Pay in TND · No credit card required
           </p>
         </div>
@@ -105,7 +111,7 @@ export default function Home() {
       <Reveal className="flex justify-center px-6 pt-6 pb-20">
         <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 border border-[#e6e6e7] rounded-full px-8 py-3 text-sm text-[#6e6e73] bg-white">
           <span>
-            <strong className="text-[#1d1d1f] font-bold">6</strong> MENA markets
+            <strong className="text-[#1d1d1f] font-bold">13</strong> markets — MENA + global trends
           </span>
           <span className="hidden sm:inline text-[#e6e6e7]">·</span>
           <span>
@@ -154,6 +160,7 @@ export default function Home() {
         <Reveal>
           <div className="holo-ring rounded-3xl">
             <div className="rounded-[23px] bg-white px-8 py-14">
+              <Mascot size={120} animated={false} className="mb-2" />
               <h2 className="text-3xl md:text-4xl font-black tracking-tight mb-3">
                 Your competitors&apos; best ads.
                 <br />

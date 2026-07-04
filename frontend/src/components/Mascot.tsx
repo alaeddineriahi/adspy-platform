@@ -5,43 +5,35 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Fenki — the AdSpy mascot (white fennec, holo-gradient ears, red chachia).
  *
- * Assets sit on an OFF-white (~#f0f0f0) background with no alpha, and a
- * gradient bar is baked into the video's floor. Every CSS-level fix
- * (mix-blend-multiply + filter) failed in the wild for two reasons:
- *   1. playing <video> gets promoted to a hardware overlay that ignores CSS,
- *   2. the edge-fade mask creates an ISOLATED stacking context, inside which
- *      mix-blend-mode blends against nothing — so the box came back.
+ * Assets sit on a uniform off-white (~242) background, no alpha. The page
+ * behind him is NOT flat — decorative orbs tint it — so no uniform color
+ * remap can ever match it; the only correct compositing is multiply
+ * blending, which lets the real backdrop show through white pixels.
  *
- * So everything now happens in canvas pixels, immune to both:
- *   - a hidden <video> only decodes; the canvas mirrors its frames
- *   - the bottom 24% of each video frame (the gradient bar) is cropped
- *     at the SOURCE rect
- *   - the background is SAMPLED from a corner pixel and a brightness factor
- *     is computed so that bg becomes exactly the page color — the background
- *     isn't hidden, it's converted into the page
- *   - stills (poses, reduced-motion, fallback) run through the same canvas
- *     pipeline for a consistent look
- * The elliptical mask stays purely as a soft edge fade (no blending logic).
+ * Multiply silently fails in two ways, both handled here:
+ *  1. A playing <video> gets promoted to a hardware overlay that ignores
+ *     CSS → the video is a hidden decoder; a <canvas> mirrors its frames.
+ *  2. ANY ancestor with a stacking context (CSS masks, fade-up animations,
+ *     opacity, transforms) ISOLATES the blend — the canvas then blends
+ *     against nothing and the box reappears. So: no mask (multiply makes
+ *     white edges invisible on its own), no fade-up wrapper (the entrance
+ *     fade is the canvas's own opacity transition, which does not isolate
+ *     an element from its backdrop), and the in-canvas brightness remap
+ *     pushes the 242 background to pure 255 so multiply erases it exactly.
+ *
+ * Stills (poses / reduced motion / video failure) run through the same
+ * canvas + blend pipeline.
  */
 export type MascotPose = "hero" | "hot" | "thinking" | "empty" | "celebrate";
 
-const EDGE_MASK = {
-  maskImage: "radial-gradient(ellipse 78% 74% at 50% 46%, black 62%, transparent 98%)",
-  WebkitMaskImage: "radial-gradient(ellipse 78% 74% at 50% 46%, black 62%, transparent 98%)",
-} as React.CSSProperties;
+const CROP_BOTTOM = 0.03;  // thin dark line at the video's very bottom edge
 
-const PAGE_LUMA = 251;      // #fbfbfb — what the asset background must become
-// Only a thin dark line at the video's very bottom edge needs cropping.
-// (Frame-scan verdict: the "gradient bar" was NEVER in the video — it was the
-// landing badge's background-clip bug — and the ground shadow is real content.)
-const CROP_BOTTOM = 0.03;
-
-/** brightness factor that maps the sampled background onto the page color */
+/** brightness factor that maps the sampled background to pure white (255) */
 function bgScale(ctx: CanvasRenderingContext2D): number {
   try {
     const d = ctx.getImageData(8, 8, 1, 1).data;
     const bg = (d[0] + d[1] + d[2]) / 3;
-    return bg > 170 && bg < 254 ? PAGE_LUMA / bg : 1;
+    return bg > 170 && bg < 254 ? 255 / bg : 1;
   } catch {
     return 1;
   }
@@ -61,6 +53,7 @@ export function Mascot({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [videoOk, setVideoOk] = useState(true);
+  const [ready, setReady] = useState(false);
 
   const still = pose === "hero" ? "/mascot/fenki-hero.webp" : `/mascot/fenki-${pose}.png`;
   const reducedMotion =
@@ -90,6 +83,7 @@ export function Mascot({
           ctx.drawImage(img, 0, 0);
           ctx.filter = "none";
         }
+        setReady(true);
       };
       img.onerror = () => {
         if (!cancelled && !isFallback) render("/mascot/fenki-hero.webp", true);
@@ -123,6 +117,7 @@ export function Mascot({
           ctx.filter = "none";
           ctx.drawImage(video, 0, 0, sw, sh, 0, 0, sw, sh);
           scale = bgScale(ctx);
+          setReady(true);
         }
         if (scale !== 1 && "filter" in ctx) ctx.filter = `brightness(${scale})`;
         ctx.drawImage(video, 0, 0, sw, sh, 0, 0, sw, sh);
@@ -143,6 +138,9 @@ export function Mascot({
   }, [wantVideo]);
 
   return (
+    // NOTE: keep this wrapper free of stacking-context creators (no masks,
+    // no animations, no opacity, no transforms, no z-index) or the canvas's
+    // multiply blend gets isolated from the page and the white box returns.
     <div
       className={`relative mx-auto select-none pointer-events-none ${className}`}
       style={{ width: size, height: size * 0.82 }}
@@ -164,8 +162,8 @@ export function Mascot({
       )}
       <canvas
         ref={canvasRef}
-        className="w-full h-full object-cover"
-        style={EDGE_MASK}
+        className="w-full h-full object-cover mix-blend-multiply transition-opacity duration-700"
+        style={{ opacity: ready ? 1 : 0 }}
         role="img"
         aria-label="Fenki, the AdSpy fennec"
       />

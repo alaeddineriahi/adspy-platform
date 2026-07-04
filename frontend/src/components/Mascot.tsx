@@ -28,12 +28,26 @@ export type MascotPose = "hero" | "hot" | "thinking" | "empty" | "celebrate";
 
 const CROP_BOTTOM = 0.03;  // thin dark line at the video's very bottom edge
 
-/** brightness factor that maps the sampled background to pure white (255) */
-function bgScale(ctx: CanvasRenderingContext2D): number {
+/**
+ * Brightness factor that maps the background to pure white (255).
+ * The video bg is ~242 but NOT perfectly uniform (compression noise dips it
+ * a few levels), and multiply leaves a faint gray veil wherever a pixel
+ * lands under the target — so calibrate against the DARKEST of several
+ * background samples, minus a small safety margin, so every bg pixel clips
+ * to 255 and vanishes completely.
+ */
+function bgScale(ctx: CanvasRenderingContext2D, w: number, h: number): number {
   try {
-    const d = ctx.getImageData(8, 8, 1, 1).data;
-    const bg = (d[0] + d[1] + d[2]) / 3;
-    return bg > 170 && bg < 254 ? 255 / bg : 1;
+    const pts: [number, number][] = [
+      [6, 6], [w - 7, 6], [6, Math.floor(h / 2)], [w - 7, Math.floor(h / 2)],
+      [Math.floor(w / 2), 6], [6, h - 7],
+    ];
+    let darkest = 255;
+    for (const [x, y] of pts) {
+      const d = ctx.getImageData(x, y, 1, 1).data;
+      darkest = Math.min(darkest, (d[0] + d[1] + d[2]) / 3);
+    }
+    return darkest > 170 && darkest < 254 ? 255 / (darkest - 3) : 1;
   } catch {
     return 1;
   }
@@ -77,7 +91,7 @@ export function Mascot({
         canvas.height = img.naturalHeight;
         ctx.filter = "none";
         ctx.drawImage(img, 0, 0);
-        const scale = bgScale(ctx);
+        const scale = bgScale(ctx, canvas.width, canvas.height);
         if (scale !== 1 && "filter" in ctx) {
           ctx.filter = `brightness(${scale})`;
           ctx.drawImage(img, 0, 0);
@@ -109,18 +123,23 @@ export function Mascot({
       if (video.readyState >= 2 && video.videoWidth) {
         const sw = video.videoWidth;
         const sh = Math.floor(video.videoHeight * (1 - CROP_BOTTOM));
-        if (canvas.width !== sw || canvas.height !== sh) {
-          canvas.width = sw;
-          canvas.height = sh;
+        // Render at display resolution, not the video's native size —
+        // sharper enough, and ~10x less pixel work per frame.
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const dw = Math.min(sw, Math.round(size * 1.4 * dpr));
+        const dh = Math.round(dw * (sh / sw));
+        if (canvas.width !== dw || canvas.height !== dh) {
+          canvas.width = dw;
+          canvas.height = dh;
         }
         if (scale === null) {
           ctx.filter = "none";
-          ctx.drawImage(video, 0, 0, sw, sh, 0, 0, sw, sh);
-          scale = bgScale(ctx);
+          ctx.drawImage(video, 0, 0, sw, sh, 0, 0, dw, dh);
+          scale = bgScale(ctx, dw, dh);
           setReady(true);
         }
         if (scale !== 1 && "filter" in ctx) ctx.filter = `brightness(${scale})`;
-        ctx.drawImage(video, 0, 0, sw, sh, 0, 0, sw, sh);
+        ctx.drawImage(video, 0, 0, sw, sh, 0, 0, dw, dh);
         ctx.filter = "none";
       }
       raf = requestAnimationFrame(draw);
@@ -135,7 +154,7 @@ export function Mascot({
       video.removeEventListener("error", onError);
       video.pause();
     };
-  }, [wantVideo]);
+  }, [wantVideo, size]);
 
   return (
     // NOTE: keep this wrapper free of stacking-context creators (no masks,

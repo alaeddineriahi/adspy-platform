@@ -26,12 +26,15 @@ import { useEffect, useRef, useState } from "react";
 export type MascotPose = "hero" | "hot" | "thinking" | "empty" | "celebrate";
 
 const EDGE_MASK = {
-  maskImage: "radial-gradient(ellipse 74% 70% at 50% 44%, black 60%, transparent 94%)",
-  WebkitMaskImage: "radial-gradient(ellipse 74% 70% at 50% 44%, black 60%, transparent 94%)",
+  maskImage: "radial-gradient(ellipse 78% 74% at 50% 46%, black 62%, transparent 98%)",
+  WebkitMaskImage: "radial-gradient(ellipse 78% 74% at 50% 46%, black 62%, transparent 98%)",
 } as React.CSSProperties;
 
 const PAGE_LUMA = 251;      // #fbfbfb — what the asset background must become
-const CROP_BOTTOM = 0.24;   // video floor slice holding the baked-in gradient bar
+// Only a thin dark line at the video's very bottom edge needs cropping.
+// (Frame-scan verdict: the "gradient bar" was NEVER in the video — it was the
+// landing badge's background-clip bug — and the ground shadow is real content.)
+const CROP_BOTTOM = 0.03;
 
 /** brightness factor that maps the sampled background onto the page color */
 function bgScale(ctx: CanvasRenderingContext2D): number {

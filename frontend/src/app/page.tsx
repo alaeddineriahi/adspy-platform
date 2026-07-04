@@ -65,10 +65,13 @@ export default function Home() {
             <Mascot size={440} className="-mb-8 -mt-6" />
           </div>
 
-          {/* Gradient badge pill */}
+          {/* Gradient badge pill. NOTE: holo-text (background-clip:text) must
+              live on a NESTED span — on the pill span it clips the white
+              background away too, rendering a solid gradient bar with
+              invisible text. */}
           <div className="fade-up inline-flex holo-ring rounded-full mb-7" style={delay(100)}>
-            <span className="rounded-full bg-[#fbfbfb] px-5 py-1.5 text-sm font-semibold holo-text">
-              Ad intelligence for MENA
+            <span className="rounded-full bg-[#fbfbfb] px-5 py-1.5 text-sm font-semibold">
+              <span className="holo-text">Ad intelligence for MENA</span>
             </span>
           </div>
 

@@ -111,6 +111,7 @@ Reply with STRICT JSON only, exactly this shape:
  "est_supply_cost_usd_min": 2.5,
  "est_supply_cost_usd_max": 6.0,
  "sourcing_search_term": "3-6 word english term to find it on AliExpress",
+ "sourcing_search_term_fr": "3-6 word FRENCH term for Tunisian directories and Google (e.g. 'complément alimentaire minceur gélules')",
  "is_supplement": false,
  "tunisia_manufacturable": false,
  "tunisia_manufacturing_note": "1 sentence: what kind of Tunisian maker could produce it (or empty string)",
@@ -128,12 +129,18 @@ No markdown, no commentary — JSON only."""
 
 # 🇹🇳 Local sourcing — the edge China can't match: no customs, 1-week restock,
 # COD-friendly cash cycles, and "made in Tunisia" as a marketing angle.
+# Tunisian laboratories that make / façonnent food supplements. Links are
+# FRENCH Google searches (Tunisia searches in FR/AR, never EN) the user
+# verifies — we never claim a specific MOQ or certification.
 _TN_SUPPLEMENT_LABS = [
-    {"name": "Laboratoires MédiS", "note": "Major Tunisian pharma lab — contract manufacturing (façonnage)"},
-    {"name": "TERIAK", "note": "Contract manufacturer for pharma & parapharma products"},
-    {"name": "Laboratoires SAIPH", "note": "Tunisian manufacturer with para/supplement lines"},
-    {"name": "Adwya", "note": "Established lab, parapharma & supplement capable"},
-    {"name": "UNIMED", "note": "Export-grade production, sterile & para lines"},
+    {"name": "Medicka", "note": "Laboratoire tunisien de compléments alimentaires — façonnage & marque blanche"},
+    {"name": "Laboratoires MédiS", "note": "Grand laboratoire pharmaceutique tunisien — façonnage"},
+    {"name": "TERIAK", "note": "Façonnier pharma & parapharmacie"},
+    {"name": "Laboratoires SAIPH", "note": "Fabricant tunisien, lignes para/compléments"},
+    {"name": "Adwya", "note": "Laboratoire établi, parapharmacie & compléments"},
+    {"name": "UNIMED", "note": "Production qualité export, lignes stériles & para"},
+    {"name": "Opalia Pharma (Recordati)", "note": "Laboratoire pharmaceutique tunisien majeur"},
+    {"name": "Philadelphia Pharma", "note": "Laboratoire tunisien, pharma & parapharmacie"},
 ]
 
 
@@ -141,22 +148,26 @@ def _google(q: str) -> str:
     return f"https://www.google.com/search?q={quote_plus(q)}"
 
 
-def _tn_sources(term: str, is_supplement: bool) -> list[dict]:
+def _tn_sources(term_fr: str, is_supplement: bool) -> list[dict]:
     """Tunisian manufacturer leads: curated labs for supplements + B2B
-    directories for everything else. Links are searches/directories the user
-    verifies — we never claim a specific MOQ or certification."""
+    directories for everything else. `term_fr` MUST be French — Tunisian
+    directories and Google give nothing useful for English queries."""
     sources: list[dict] = []
     if is_supplement:
         sources += [
             {**lab, "url": _google(f"{lab['name']} Tunisie façonnage complément alimentaire")}
             for lab in _TN_SUPPLEMENT_LABS
         ]
+        sources.append({
+            "name": "Autres façonniers 🇹🇳", "note": "Recherche Google — fabricants de compléments en Tunisie",
+            "url": _google(f"façonnage complément alimentaire Tunisie fabricant {term_fr}"),
+        })
     sources += [
-        {"name": "Kompass Tunisie", "note": "B2B directory of Tunisian manufacturers",
-         "url": f"https://tn.kompass.com/searchCompanies?text={quote_plus(term)}"},
-        {"name": "Europages Tunisie", "note": "Tunisian suppliers & exporters by product",
-         "url": f"https://www.europages.fr/entreprises/Tunisie/{quote_plus(term)}.html"},
-        {"name": "Tunisie Industrie (APII)", "note": "Official industrial database — search by activity",
+        {"name": "Kompass Tunisie", "note": "Annuaire B2B des fabricants tunisiens",
+         "url": f"https://tn.kompass.com/searchCompanies?text={quote_plus(term_fr)}"},
+        {"name": "Europages Tunisie", "note": "Fournisseurs & exportateurs tunisiens par produit",
+         "url": f"https://www.europages.fr/entreprises/Tunisie/{quote_plus(term_fr)}.html"},
+        {"name": "Tunisie Industrie (APII)", "note": "Base officielle de l'industrie — recherche par activité",
          "url": "http://www.tunisieindustrie.nat.tn/fr/dbi.asp"},
     ]
     return sources
@@ -238,6 +249,9 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
             }
 
     term = llm.get("sourcing_search_term") or llm.get("product_name") or ""
+    # Tunisia-facing searches in FRENCH (fall back to the product name, which
+    # for MENA ads is usually already FR/AR) — never the English China term.
+    term_fr = llm.get("sourcing_search_term_fr") or llm.get("product_name") or term
     is_supplement = bool(llm.get("is_supplement"))
     # Supplements are always locally manufacturable (contract labs exist).
     tn_feasible = is_supplement or bool(llm.get("tunisia_manufacturable"))
@@ -256,7 +270,7 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
                     or ("Supplements can be produced by Tunisian contract labs (façonnage) — "
                         "local stock, no customs, and a 🇹🇳 'made in Tunisia' trust angle."
                         if is_supplement else ""),
-            "tunisia_sources": _tn_sources(term, is_supplement) if tn_feasible else [],
+            "tunisia_sources": _tn_sources(term_fr, is_supplement) if tn_feasible else [],
         },
     }
 

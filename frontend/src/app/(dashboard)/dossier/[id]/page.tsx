@@ -68,7 +68,7 @@ export default function DossierPage() {
   const [error, setError] = useState("");
   const [outOfCredits, setOutOfCredits] = useState(false);
 
-  const cacheKey = `adspy_dossier_v2_${id}`; // v2: sourcing gained made-in-china + 🇹🇳 local block
+  const cacheKey = `adspy_dossier_v3_${id}`; // v3: FR search terms for TN sources + expanded lab list
 
   useEffect(() => {
     if (!id) return;

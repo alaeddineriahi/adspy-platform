@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { Settings, Sparkles, CreditCard, LogOut, UserCircle } from "lucide-react";
 import { useUsage } from "@/components/UsageProvider";
+import { PageHeader } from "@/components/PageHeader";
 
 const PLAN_LABEL: Record<string, string> = { free: "Free", pro: "Pro", agency: "Agency" };
 
@@ -18,12 +19,15 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-6 flex items-center gap-2">
-        <Settings className="w-6 h-6" /> Settings
-      </h2>
+      <PageHeader
+        icon={Settings}
+        gradient="from-[#1d1d1f] to-[#6e6e73]"
+        title="Settings"
+        subtitle="Your account, plan, and AI credit usage."
+      />
 
       {/* Account */}
-      <div className="bg-white border border-[#e6e6e7] rounded-2xl p-6 mb-5">
+      <div className="bg-white border border-[#e6e6e7] rounded-2xl p-6 mb-5 fade-up" style={{ ["--delay" as string]: "80ms" }}>
         <h3 className="text-sm font-bold text-[#1d1d1f] mb-4 flex items-center gap-1.5">
           <UserCircle className="w-4 h-4" /> Account
         </h3>

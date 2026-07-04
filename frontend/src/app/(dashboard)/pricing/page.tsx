@@ -74,9 +74,12 @@ export default function PricingPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <div className="text-center mb-10">
+      <div className="text-center mb-10 fade-up" style={{ ["--delay" as string]: "0ms" }}>
         <h2 className="text-3xl font-black tracking-tight text-[#1d1d1f] flex items-center justify-center gap-2">
-          <CreditCard className="w-7 h-7" /> Plans & pricing
+          <span className="w-11 h-11 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-[#3e86c6] to-[#ec4492] shadow-sm">
+            <CreditCard className="w-5 h-5" />
+          </span>
+          Plans & pricing
         </h2>
         <p className="text-sm text-gray-500 mt-2">
           Search and Brand Spy stay unlimited on paid plans — AI credits are the only meter.
@@ -102,13 +105,14 @@ export default function PricingPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((p) => {
+          {plans.map((p, i) => {
             const highlight = p.id === "pro";
             const isCurrent = p.id === currentPlan;
             return (
               <div
                 key={p.id}
-                className={`relative rounded-2xl ${highlight ? "holo-ring shadow-lg shadow-gray-200/80" : ""}`}
+                className={`relative rounded-2xl fade-up ${highlight ? "holo-ring shadow-lg shadow-gray-200/80" : ""}`}
+                style={{ ["--delay" as string]: `${i * 110 + 80}ms` }}
               >
               <div
                 className={`relative bg-white p-6 flex flex-col h-full ${

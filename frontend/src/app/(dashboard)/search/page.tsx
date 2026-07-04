@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Search, Loader2, TrendingUp } from "lucide-react";
 import { AdCard } from "@/components/ads/AdCard";
 import { SkeletonCard } from "@/components/ads/SkeletonCard";
+import { PageHeader, Stagger } from "@/components/PageHeader";
 import { Ad } from "@/types";
 
 type Platform = "all" | "meta" | "tiktok";
@@ -80,11 +81,16 @@ export default function SearchPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1">Search ads</h2>
-      <p className="text-sm text-[#6e6e73] mb-6">Winning creatives across 6 MENA markets — longest-running and hardest-scaling first.</p>
+      <PageHeader
+        icon={Search}
+        gradient="from-[#3e86c6] to-[#a666aa]"
+        title="Search ads"
+        subtitle="Winning creatives across 13 markets — MENA core + global trends — ranked by what's printing money right now."
+        live
+      />
 
       {/* Search bar */}
-      <form onSubmit={handleSubmit} className="relative mb-6">
+      <form onSubmit={handleSubmit} className="relative mb-6 fade-up" style={{ ["--delay" as string]: "80ms" }}>
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
@@ -104,7 +110,7 @@ export default function SearchPage() {
       </form>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-8">
+      <div className="flex flex-wrap gap-3 mb-8 fade-up" style={{ ["--delay" as string]: "160ms" }}>
         <select
           value={platform}
           onChange={(e) => setPlatform(e.target.value as Platform)}
@@ -196,8 +202,10 @@ export default function SearchPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {results.map((ad) => (
-              <AdCard key={ad.id || ad.ad_id} ad={ad} />
+            {results.map((ad, i) => (
+              <Stagger key={ad.id || ad.ad_id} index={i}>
+                <AdCard ad={ad} />
+              </Stagger>
             ))}
           </div>
 

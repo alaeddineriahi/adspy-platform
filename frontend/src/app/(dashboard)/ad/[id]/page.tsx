@@ -100,7 +100,7 @@ export default function AdDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Left: Media */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 fade-up" style={{ ["--delay" as string]: "0ms" }}>
           <div className="bg-gray-100 rounded-xl overflow-hidden aspect-video mb-4">
             {ad.media_urls?.[0] ? (
               ad.ad_format === "video" ? (
@@ -125,7 +125,7 @@ export default function AdDetailPage() {
         </div>
 
         {/* Right: Info */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 fade-up" style={{ ["--delay" as string]: "100ms" }}>
           <div className="flex items-center gap-3 mb-4">
             <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${
               ad.platform === "meta" ? "bg-blue-100 text-blue-700" : "bg-gray-900 text-white"

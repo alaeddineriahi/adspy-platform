@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { authFetch, apiError, errMessage } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
+import { PageHeader } from "@/components/PageHeader";
 
 const BRAND_INTEL_KEY = "adspy_brand_intel"; // read by the Media Buyer page
 
@@ -104,16 +105,15 @@ export default function IntelPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-2">
-        <ScanSearch className="w-6 h-6" /> Website Intel
-      </h2>
-      <p className="text-sm text-[#6e6e73] mb-6">
-        Paste any store URL — yours or a competitor&apos;s — and get the brand decoded:
-        products, audience, offers, and the exact angles to run. 1 credit per analysis.
-      </p>
+      <PageHeader
+        icon={ScanSearch}
+        gradient="from-[#ec4492] to-[#ee4454]"
+        title="Website Intel"
+        subtitle="Paste any store URL — yours or a competitor's — and get the brand decoded: products, audience, offers, and the exact angles to run. 1 credit per analysis."
+      />
 
       {/* URL input */}
-      <form onSubmit={analyze} className="relative mb-6">
+      <form onSubmit={analyze} className="relative mb-6 fade-up" style={{ ["--delay" as string]: "80ms" }}>
         <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           value={url}

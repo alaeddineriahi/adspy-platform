@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Eye, Search, Loader2, TrendingUp, Layers, Clock, Radio } from "lucide-react";
 import Link from "next/link";
 import { Brand } from "@/types";
+import { PageHeader, Stagger } from "@/components/PageHeader";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -50,11 +51,15 @@ export default function BrandsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-6 flex items-center gap-2">
-        <Eye className="w-6 h-6" /> Brand Spy
-      </h2>
+      <PageHeader
+        icon={Eye}
+        gradient="from-[#a666aa] to-[#ec4492]"
+        title="Brand Spy"
+        subtitle="The advertisers printing the most money — verified live-ad counts, scaling totals, and trajectory."
+        live
+      />
 
-      <form onSubmit={submit} className="relative mb-8">
+      <form onSubmit={submit} className="relative mb-8 fade-up" style={{ ["--delay" as string]: "80ms" }}>
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           value={query}
@@ -101,10 +106,10 @@ export default function BrandsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {brands.map((b, i) => (
+          <Stagger key={b.advertiser_id || b.advertiser_name} index={i}>
           <Link
-            key={b.advertiser_id || b.advertiser_name}
             href={`/brands/${b.advertiser_id}`}
-            className="bg-white border border-[#e6e6e7] rounded-2xl p-5 hover:shadow-md transition"
+            className="block bg-white border border-[#e6e6e7] rounded-2xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-gray-900 truncate">
@@ -149,6 +154,7 @@ export default function BrandsPage() {
               {b.total_ads} winning ads · {b.countries?.join(", ")}
             </p>
           </Link>
+          </Stagger>
         ))}
       </div>
     </div>

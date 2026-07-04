@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Bookmark } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
+import { PageHeader, Stagger } from "@/components/PageHeader";
 import { SkeletonCard } from "@/components/ads/SkeletonCard";
 import { useSaved } from "@/components/SavedProvider";
 import { authFetch } from "@/lib/api";
@@ -38,12 +39,12 @@ export default function SavedPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-2">
-        <Bookmark className="w-6 h-6" /> Saved ads
-      </h2>
-      <p className="text-sm text-gray-500 mb-6">
-        Your swipe file of winning ads. {visible.length > 0 && `${visible.length} saved.`}
-      </p>
+      <PageHeader
+        icon={Bookmark}
+        gradient="from-[#f05427] to-[#3e86c6]"
+        title="Saved ads"
+        subtitle={`Your swipe file of winning ads.${visible.length > 0 ? ` ${visible.length} saved.` : ""}`}
+      />
 
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -65,8 +66,10 @@ export default function SavedPage() {
 
       {!loading && visible.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {visible.map((ad) => (
-            <AdCard key={ad.id || ad.ad_id} ad={ad} />
+          {visible.map((ad, i) => (
+            <Stagger key={ad.id || ad.ad_id} index={i}>
+              <AdCard ad={ad} />
+            </Stagger>
           ))}
         </div>
       )}

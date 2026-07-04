@@ -6,6 +6,7 @@ import { Zap, Loader2, Film, Copy, CheckCheck } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { authFetch, apiError, errMessage } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
+import { PageHeader } from "@/components/PageHeader";
 
 interface Hook {
   type: string;
@@ -90,15 +91,14 @@ export default function AIToolsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-2">
-        <Film className="w-6 h-6" /> AI Video Script Generator
-      </h2>
-      <p className="text-sm text-gray-500 mb-6">
-        High-converting short-form video scripts: scroll-stopping hooks, scene-by-scene
-        breakdown, and a CTA — built for Meta Reels & TikTok.
-      </p>
+      <PageHeader
+        icon={Film}
+        gradient="from-[#ee4454] to-[#f05427]"
+        title="AI Video Script Generator"
+        subtitle="High-converting short-form video scripts: scroll-stopping hooks, scene-by-scene breakdown, and a CTA — built for Meta Reels & TikTok."
+      />
 
-      <form onSubmit={generate} className="space-y-4 bg-white border border-[#e6e6e7] rounded-2xl p-6">
+      <form onSubmit={generate} className="space-y-4 bg-white border border-[#e6e6e7] rounded-2xl p-6 fade-up" style={{ ["--delay" as string]: "80ms" }}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Product / Service</label>
           <input

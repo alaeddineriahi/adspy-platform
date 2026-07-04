@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Eye, Loader2, Layers, Clock, TrendingUp, Radio, ArrowUpRight, BellRing, Bell } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
+import { Stagger } from "@/components/PageHeader";
 import { API_URL, authFetch } from "@/lib/api";
 import { Ad } from "@/types";
 
@@ -108,7 +109,7 @@ export default function BrandDetailPage() {
         </div>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-4 mb-2">
+          <div className="flex items-start justify-between gap-4 mb-2 fade-up" style={{ ["--delay" as string]: "0ms" }}>
             <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] flex items-center gap-2">
               <Eye className="w-6 h-6" /> {name}
             </h2>
@@ -162,8 +163,10 @@ export default function BrandDetailPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {ads.map((ad) => (
-              <AdCard key={ad.id || ad.ad_id} ad={ad} />
+            {ads.map((ad, i) => (
+              <Stagger key={ad.id || ad.ad_id} index={i}>
+                <AdCard ad={ad} />
+              </Stagger>
             ))}
           </div>
         </>

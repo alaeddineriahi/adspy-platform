@@ -284,14 +284,17 @@ export default function MediaBuyerPage() {
       {/* Header */}
       <div className="px-8 pt-6 pb-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f] flex items-center gap-2">
-              <Megaphone className="w-6 h-6" /> Media Buyer
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              A senior media buyer that gives you the honest truth — tailored to your budget, market and
-              creatives. Advisory only for now (live launching is on the roadmap).
-            </p>
+          <div className="flex items-start gap-3.5 fade-up" style={{ ["--delay" as string]: "0ms" }}>
+            <span className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-[#a666aa] to-[#3e86c6] shadow-sm">
+              <Megaphone className="w-5 h-5" />
+            </span>
+            <div>
+              <h2 className="text-2xl font-black tracking-tight text-[#1d1d1f]">Media Buyer</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                A senior media buyer that gives you the honest truth — tailored to your budget, market and
+                creatives. Advisory only for now (live launching is on the roadmap).
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button

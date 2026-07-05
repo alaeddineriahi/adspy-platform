@@ -26,7 +26,33 @@ import { useEffect, useRef, useState } from "react";
  */
 export type MascotPose = "hero" | "hot" | "thinking" | "empty" | "celebrate";
 
-const CROP_BOTTOM = 0.03;  // thin dark line at the video's very bottom edge
+const CROP_BOTTOM = 0.04;  // thin dark line at the video's very bottom edge
+const CROP_EDGE = 0.02;    // border rows/cols carry encoding artifacts (dark seam)
+
+/**
+ * Feather the drawn pixels to pure white toward every edge — white is exactly
+ * what the multiply blend erases, so any residual vignette or the character's
+ * ambient-shadow halo fades out softly instead of cutting off at the frame
+ * boundary (the visible "contour"). Runs IN the canvas, where no stacking
+ * context or overlay can disable it.
+ */
+function featherEdges(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const fx = Math.round(w * 0.12);
+  const fy = Math.round(h * 0.12);
+  const white = (g: CanvasGradient) => {
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    return g;
+  };
+  ctx.fillStyle = white(ctx.createLinearGradient(0, 0, fx, 0));
+  ctx.fillRect(0, 0, fx, h);
+  ctx.fillStyle = white(ctx.createLinearGradient(w, 0, w - fx, 0));
+  ctx.fillRect(w - fx, 0, fx, h);
+  ctx.fillStyle = white(ctx.createLinearGradient(0, 0, 0, fy));
+  ctx.fillRect(0, 0, w, fy);
+  ctx.fillStyle = white(ctx.createLinearGradient(0, h, 0, h - fy));
+  ctx.fillRect(0, h - fy, w, fy);
+}
 
 /**
  * Brightness factor that maps the background to pure white (255).
@@ -97,6 +123,7 @@ export function Mascot({
           ctx.drawImage(img, 0, 0);
           ctx.filter = "none";
         }
+        featherEdges(ctx, canvas.width, canvas.height);
         setReady(true);
       };
       img.onerror = () => {
@@ -121,8 +148,11 @@ export function Mascot({
 
     const draw = () => {
       if (video.readyState >= 2 && video.videoWidth) {
-        const sw = video.videoWidth;
-        const sh = Math.floor(video.videoHeight * (1 - CROP_BOTTOM));
+        // Source rect inset past the border-artifact rows/cols.
+        const sx = Math.round(video.videoWidth * CROP_EDGE);
+        const sy = Math.round(video.videoHeight * CROP_EDGE);
+        const sw = video.videoWidth - 2 * sx;
+        const sh = Math.floor(video.videoHeight * (1 - CROP_BOTTOM)) - sy;
         // Render at display resolution, not the video's native size —
         // sharper enough, and ~10x less pixel work per frame.
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -134,13 +164,14 @@ export function Mascot({
         }
         if (scale === null) {
           ctx.filter = "none";
-          ctx.drawImage(video, 0, 0, sw, sh, 0, 0, dw, dh);
+          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
           scale = bgScale(ctx, dw, dh);
           setReady(true);
         }
         if (scale !== 1 && "filter" in ctx) ctx.filter = `brightness(${scale})`;
-        ctx.drawImage(video, 0, 0, sw, sh, 0, 0, dw, dh);
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
         ctx.filter = "none";
+        featherEdges(ctx, dw, dh);
       }
       raf = requestAnimationFrame(draw);
     };

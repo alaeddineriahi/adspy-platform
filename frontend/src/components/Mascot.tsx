@@ -162,7 +162,9 @@ export function Mascot({
     // multiply blend gets isolated from the page and the white box returns.
     <div
       className={`relative mx-auto select-none pointer-events-none ${className}`}
-      style={{ width: size, height: size * 0.82 }}
+      // min() caps the fixed size on small screens — a 560px box can't center
+      // inside a 380px phone viewport, it just overflows to one side.
+      style={{ width: `min(${size}px, 92vw)`, aspectRatio: "1 / 0.82" }}
     >
       {wantVideo && (
         <video

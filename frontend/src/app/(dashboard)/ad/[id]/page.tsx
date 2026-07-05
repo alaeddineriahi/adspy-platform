@@ -38,7 +38,9 @@ export default function AdDetailPage() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/creatives/${id}`)
-      .then((r) => r.json())
+      // A 404 body ({detail: "Ad not found"}) is truthy — passing it to setAd
+      // renders an empty husk of a page instead of the not-found state.
+      .then((r) => (r.ok ? r.json() : null))
       .then(setAd)
       .catch(console.error)
       .finally(() => setLoading(false));

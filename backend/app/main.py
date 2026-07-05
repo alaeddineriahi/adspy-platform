@@ -70,7 +70,10 @@ from app.core.ratelimit import RateLimitMiddleware  # noqa: E402
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    # Both hostname spellings of the dev frontend: the app is served on
+    # localhost:3000 but a browser opened on 127.0.0.1:3000 must pass CORS too
+    # (Windows localhost tax pushed all API URLs to 127.0.0.1).
+    allow_origins=list({settings.FRONTEND_URL, "http://localhost:3000", "http://127.0.0.1:3000"}),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

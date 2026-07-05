@@ -64,7 +64,7 @@ export default function Home() {
               NO fade-up wrapper: its animation creates a stacking context
               that isolates the canvas's multiply blend (= white box bug).
               The component fades itself in via its own opacity. */}
-          <Mascot size={440} className="-mb-8 -mt-6" />
+          <Mascot size={560} className="-mb-12 -mt-10" />
 
           {/* Gradient badge pill. NOTE: holo-text (background-clip:text) must
               live on a NESTED span — on the pill span it clips the white

@@ -170,7 +170,10 @@ export default function MediaBuyerPage() {
     } catch {}
     setLoaded(true);
 
-    const id = new URLSearchParams(window.location.search).get("ad");
+    // "creative", not "ad": ad blockers match "?ad=" in URLs (same reason the
+    // detail route is /creative/[id]). "ad" kept as fallback for old links.
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("creative") || params.get("ad");
     if (id) {
       setAdId(id);
       fetch(`${API_URL}/api/creatives/${id}`)

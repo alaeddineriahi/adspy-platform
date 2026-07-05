@@ -175,7 +175,7 @@ export function AdCard({ ad }: { ad: Ad }) {
       {/* Actions */}
       <div className="px-4 pb-4 flex gap-2">
         <Link
-          href={`/ad/${ad.id || ad.ad_id}`}
+          href={`/creative/${ad.id || ad.ad_id}`}
           className="flex-1 text-center py-2 text-sm font-semibold bg-[#1d1d1f] text-white rounded-full hover:bg-black transition"
         >
           View details
@@ -188,7 +188,7 @@ export function AdCard({ ad }: { ad: Ad }) {
           <Package className="w-4 h-4 text-gray-600" />
         </Link>
         <Link
-          href={`/mediabuyer?ad=${ad.id || ad.ad_id}`}
+          href={`/mediabuyer?creative=${ad.id || ad.ad_id}`}
           title="Plan a campaign with the media buyer"
           className="flex items-center justify-center w-9 h-9 border border-[#e6e6e7] rounded-full hover:border-[#1d1d1f] transition"
         >

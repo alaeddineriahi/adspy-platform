@@ -116,7 +116,7 @@ export default function DossierPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <Link href={`/ad/${id}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4">
+      <Link href={`/creative/${id}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 mb-4">
         <ArrowLeft className="w-4 h-4" /> Back to ad
       </Link>
 
@@ -415,10 +415,10 @@ export default function DossierPage() {
                   <Target className="w-4 h-4" /> Spy all similar winners
                 </Link>
               )}
-              <Link href={`/ad/${id}`} className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
+              <Link href={`/creative/${id}`} className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-[#e6e6e7] hover:border-[#1d1d1f] transition">
                 <Zap className="w-4 h-4" /> Generate my ad pack
               </Link>
-              <Link href={`/mediabuyer?ad=${id}`} className="btn-holo px-4 py-2.5 text-sm">
+              <Link href={`/mediabuyer?creative=${id}`} className="btn-holo px-4 py-2.5 text-sm">
                 <Megaphone className="w-4 h-4" /> Plan the campaign
               </Link>
             </div>

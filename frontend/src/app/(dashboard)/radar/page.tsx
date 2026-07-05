@@ -216,7 +216,7 @@ export default function RadarPage() {
       <div className="space-y-3">
         {events.map((e, i) => {
           const t = TYPES[e.event_type] ?? TYPES.new_hot;
-          const href = e.ad_id ? `/ad/${e.ad_id}` : e.advertiser_id ? `/brands/${e.advertiser_id}` : null;
+          const href = e.ad_id ? `/creative/${e.ad_id}` : e.advertiser_id ? `/brands/${e.advertiser_id}` : null;
           return (
             <div
               key={e.id}

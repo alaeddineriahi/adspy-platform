@@ -1,19 +1,21 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Eye, Search, Loader2, TrendingUp, Layers, Clock, Radio } from "lucide-react";
+import { Eye, Search, Loader2, TrendingUp, Layers, Clock, Radio, Lock } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import { Brand } from "@/types";
 import { PageHeader, Stagger } from "@/components/PageHeader";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { authFetch } from "@/lib/api";
 
 export default function BrandsPage() {
+  const { getToken } = useAuth();
   const [query, setQuery] = useState("");
   const [bigOnly, setBigOnly] = useState(false); // "50+ ads live" quality cut
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(false);
+  const [freeCapped, setFreeCapped] = useState(false);
 
   const load = useCallback(async (q: string, big: boolean) => {
     setLoading(true);
@@ -23,15 +25,16 @@ export default function BrandsPage() {
       if (q) params.set("q", q);
       if (big) params.set("min_live_ads", "50");
       params.set("limit", "24");
-      const res = await fetch(`${API_URL}/api/brands/search?${params}`);
+      const res = await authFetch(getToken, `/api/brands/search?${params}`);
       const data = await res.json();
       setBrands(data.results || []);
+      setFreeCapped(Boolean(data.free_capped));
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getToken]);
 
   // Show the money-printing leaderboard on open; the box just filters it by name.
   useEffect(() => {
@@ -109,7 +112,7 @@ export default function BrandsPage() {
           <Stagger key={b.advertiser_id || b.advertiser_name} index={i}>
           <Link
             href={`/brands/${b.advertiser_id}`}
-            className="block bg-white border border-[#e6e6e7] rounded-2xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            className="block bg-white border border-[#e6e6e7] rounded-2xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 h-full"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-gray-900 truncate">
@@ -157,6 +160,25 @@ export default function BrandsPage() {
           </Stagger>
         ))}
       </div>
+
+      {/* Free-tier teaser wall: top-5 leaderboard only */}
+      {!loading && freeCapped && (
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl p-5 text-white holo-gradient">
+          <div className="flex items-center gap-3">
+            <Lock className="w-5 h-5 shrink-0" />
+            <p className="text-sm font-semibold">
+              This is the top 5. Pro reveals the full money-printing leaderboard, the
+              &quot;50+ ads live&quot; quality filter, and every brand&apos;s full catalog.
+            </p>
+          </div>
+          <Link
+            href="/pricing"
+            className="shrink-0 px-5 py-2.5 bg-white text-[#1d1d1f] rounded-full text-sm font-bold hover:scale-[1.03] transition"
+          >
+            See all brands
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { ArrowLeft, Eye, Loader2, Layers, Clock, TrendingUp, Radio, ArrowUpRight
 import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
 import { Stagger } from "@/components/PageHeader";
-import { API_URL, authFetch } from "@/lib/api";
+import { authFetch } from "@/lib/api";
 import { Ad } from "@/types";
 
 interface TrajectoryPoint {
@@ -52,7 +52,7 @@ export default function BrandDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`${API_URL}/api/brands/${id}/creatives?limit=60`)
+    authFetch(getToken, `/api/brands/${id}/creatives?limit=60`)
       .then((r) => (r.ok ? r.json() : { results: [], total: 0 }))
       .then((d) => {
         setAds(d.results || []);
@@ -60,14 +60,14 @@ export default function BrandDetailPage() {
       })
       .catch(() => setAds([]))
       .finally(() => setLoading(false));
-    fetch(`${API_URL}/api/brands/${id}/trajectory`)
+    authFetch(getToken, `/api/brands/${id}/trajectory`)
       .then((r) => (r.ok ? r.json() : { points: [], growth: null }))
       .then((d) => {
         setTrajectory(d.points || []);
         setGrowth(d.growth ?? null);
       })
       .catch(() => setTrajectory([]));
-    fetch(`${API_URL}/api/brands/${id}/timeline`)
+    authFetch(getToken, `/api/brands/${id}/timeline`)
       .then((r) => (r.ok ? r.json() : { months: [] }))
       .then((d) => setTimeline(d.months || []))
       .catch(() => setTimeline([]));

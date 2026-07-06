@@ -149,37 +149,40 @@ async def verify_flouci_payment(payment_id: str):
 
 @router.get("/plans")
 async def get_plans():
-    """Available plans — numbers kept in sync with PRICING.md."""
+    """Available plans — every limit here is ACTUALLY enforced in code
+    (search cap: ads.py; brand cap: brands.py; credits/saved: users.py)."""
+    from app.core.credits import FREE_SEARCH_RESULT_CAP, FREE_BRAND_CAP
     return {
         "plans": [
             {
                 "id": "free",
                 "name": "Free",
                 "price_tnd": 0,
-                "searches_per_day": 20,
+                "search_results": FREE_SEARCH_RESULT_CAP,  # top-N winners per query
+                "power_filters": False,                    # momentum/spend/scaling filters
                 "ai_credits_per_month": PLAN_CREDITS["free"],
                 "saved_ads": 10,
-                "brand_spy": False,
+                "brand_spy": FREE_BRAND_CAP,               # top-5 leaderboard teaser
             },
             {
                 "id": "pro",
                 "name": "Pro",
                 "price_tnd": PLAN_PRICES["pro"] / 1000,
-                "searches_per_day": -1,  # unlimited
+                "search_results": -1,  # unlimited
+                "power_filters": True,
                 "ai_credits_per_month": PLAN_CREDITS["pro"],
                 "saved_ads": -1,
-                "brand_spy": True,
-                "brand_spy_limit": 5,
+                "brand_spy": -1,       # full leaderboard + 50+-live filter
             },
             {
                 "id": "agency",
                 "name": "Agency",
                 "price_tnd": PLAN_PRICES["agency"] / 1000,
-                "searches_per_day": -1,
+                "search_results": -1,
+                "power_filters": True,
                 "ai_credits_per_month": PLAN_CREDITS["agency"],
                 "saved_ads": -1,
-                "brand_spy": True,
-                "brand_spy_limit": 25,
+                "brand_spy": -1,
             },
         ],
         "currency": "TND",

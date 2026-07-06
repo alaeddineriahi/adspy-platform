@@ -9,7 +9,7 @@ import {
   TrendingUp, Target, ShoppingCart, ExternalLink, Megaphone, Zap, AlertTriangle,
   Sparkles, Lock,
 } from "lucide-react";
-import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
+import { authFetch, apiError, errMessage } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 import { fmtUsd } from "@/components/ads/AdCard";
 import { Ad } from "@/types";
@@ -88,7 +88,7 @@ export default function DossierPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`${API_URL}/api/creatives/${id}`)
+    authFetch(getToken, `/api/creatives/${id}`)
       .then((r) => (r.ok ? r.json() : null))
       .then(setAd)
       .catch(() => {});
@@ -96,7 +96,7 @@ export default function DossierPage() {
       const cached = localStorage.getItem(cacheKey);
       if (cached) setDossier(JSON.parse(cached));
     } catch {}
-  }, [id, cacheKey]);
+  }, [id, cacheKey, getToken]);
 
   const generate = useCallback(async () => {
     setLoading(true);

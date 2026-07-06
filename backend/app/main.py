@@ -56,11 +56,18 @@ async def lifespan(app: FastAPI):
         pass
 
 
+# Interactive API docs (and the OpenAPI schema behind them) map the entire
+# attack surface — expose them only in DEBUG, never on the public production API.
+_docs_enabled = bool(getattr(settings, "DEBUG", False))
+
 app = FastAPI(
     title="AdSpy API",
     description="AI-powered ad intelligence platform for the MENA market.",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 # Rate limiter added BEFORE CORS so CORS wraps it — 429 responses still carry

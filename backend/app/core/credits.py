@@ -19,6 +19,14 @@ from app.models.billing import Subscription, CreditUsage
 # Monthly AI credits per plan — keep in sync with PRICING.md §3 and /api/payments/plans.
 PLAN_CREDITS = {"free": 10, "pro": 400, "agency": 1500}
 
+# Free-tier product limits (PRICING.md §2). These are what makes Pro worth
+# buying — enforced in the search/brand routes, advertised by /api/payments/plans.
+FREE_SEARCH_RESULT_CAP = 25   # free sees the top 25 winners per query, no deeper
+FREE_BRAND_CAP = 5            # Brand Spy leaderboard: top 5 only on free
+# Power filters (momentum / min-days / min-variants / min-spend) are Pro-only —
+# free gets the money-ranked feed, paid gets to slice it.
+FREE_POWER_FILTERS = False
+
 SUBSCRIPTION_DAYS = 31  # one payment buys one month (+1 day grace)
 
 
@@ -47,6 +55,14 @@ def effective_plan(sub) -> tuple[str, int]:
 async def _active_subscription(db, user_id: str) -> tuple[str, int]:
     sub = await db.scalar(select(Subscription).where(Subscription.user_id == user_id))
     return effective_plan(sub)
+
+
+async def get_plan(user_id: str) -> str:
+    """The caller's live plan name ('free' | 'pro' | 'agency'). Used by the
+    search/brand routes to gate free-tier limits without touching credits."""
+    async with async_session() as db:
+        plan, _bonus = await _active_subscription(db, user_id)
+    return plan
 
 
 async def get_usage(user_id: str) -> dict:

@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "AdSpy"
     API_BASE_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
-    DEBUG: bool = True
+    # Secure default: OFF. Dev enables it in .env (DEBUG=true). Leaving it on in
+    # prod would expose /docs + the OpenAPI schema and the X-User-Id auth
+    # fallback — so the safe default must be False.
+    DEBUG: bool = False
     DEBUG_SQL: bool = False   # set true to echo every SQL statement (verbose)
 
     # --- Database ---
@@ -75,7 +78,7 @@ class Settings(BaseSettings):
     # everything); they only differ by a lower per-country keep cap.
     INGEST_GLOBAL_ENABLED: bool = True
     INGEST_GLOBAL_COUNTRIES: str = ""       # default: US,CA,GB,AU,FR
-    INGEST_GLOBAL_MAX_PER_COUNTRY: int = 60
+    INGEST_GLOBAL_MAX_PER_COUNTRY: int = 90
 
     # Sweep scope (comma-separated strings in .env, or use defaults)
     INGEST_COUNTRIES: str = ""      # e.g. "TN,MA,EG,SA,AE"
@@ -102,7 +105,10 @@ class Settings(BaseSettings):
     # Best-performing thresholds
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3
-    INGEST_MAX_PER_COUNTRY: int = 40
+    # Depth per market. Raised 40→90 (2026-07-06): dedupe now keeps only distinct
+    # creatives, so a bigger cap buys real breadth, not collated copies — thin
+    # niches (sneakers, supplements) were bottoming out at single digits.
+    INGEST_MAX_PER_COUNTRY: int = 90
     # An ad not re-seen by any sweep for this many days is marked inactive —
     # keeps "active/longest-running" honest instead of frozen at scrape time.
     INGEST_STALE_DAYS: int = 14

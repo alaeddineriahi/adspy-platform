@@ -108,6 +108,22 @@ ADS_INDEX_MAPPING = {
 }
 
 
+# Internal-only fields — our scoring guts and provenance. Useful to us, but
+# handing them to the client leaks how ranking works and invites cloning, so
+# they're stripped from every public API response (search, brand ads, detail).
+# The UI never reads these; heat/momentum/variant_count/spend stay exposed.
+_PRIVATE_FIELDS = frozenset({
+    "source", "creative_key", "performance_score", "velocity", "score",
+    "ecom_signals", "strong_commerce", "is_ecommerce", "indexed_at",
+    "tt_industry", "tt_objective",
+})
+
+
+def public_ad(doc: dict) -> dict:
+    """A catalog doc with internal scoring/provenance fields removed."""
+    return {k: v for k, v in doc.items() if k not in _PRIVATE_FIELDS}
+
+
 def get_es_client() -> AsyncElasticsearch:
     """Get async Elasticsearch client."""
     return AsyncElasticsearch(
@@ -254,7 +270,7 @@ async def search_ads(
 
     return {
         "results": [
-            {**hit["_source"], "id": hit["_id"], "score": hit.get("_score")}
+            {**public_ad(hit["_source"]), "id": hit["_id"]}
             for hit in hits
         ],
         "total": total,
@@ -296,7 +312,7 @@ async def get_brand_ads(
     total = int(result.get("aggregations", {}).get("groups", {}).get("value", doc_total))
 
     return {
-        "results": [{**h["_source"], "id": h["_id"]} for h in hits],
+        "results": [{**public_ad(h["_source"]), "id": h["_id"]} for h in hits],
         "total": total,
         "brand": advertiser_name or advertiser_id,
         "page": page,
@@ -484,6 +500,6 @@ async def get_trending_ads(
     hits = result["hits"]["hits"]
 
     return {
-        "results": [{**h["_source"], "id": h["_id"]} for h in hits],
+        "results": [{**public_ad(h["_source"]), "id": h["_id"]} for h in hits],
         "total": result["hits"]["total"]["value"],
     }

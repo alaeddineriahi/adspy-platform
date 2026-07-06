@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import select, delete
 
 from app.core.auth import get_user_id
+from app.core.credits import get_plan, FREE_BRAND_CAP
 from app.core.database import async_session
 from app.core.elasticsearch import (
     get_es_client,
@@ -27,22 +28,33 @@ async def search_brands(
     country: Optional[str] = Query(None, description="ISO country code"),
     min_live_ads: int = Query(0, ge=0, description="Only brands with at least N ads live (deep-dive data)"),
     limit: int = Query(24, ge=1, le=100),
+    uid: str = Depends(get_user_id),
 ):
     """Top money-printing advertisers, ranked by total creative scaling.
 
-    With no `q` this returns the leaderboard of brands printing the most money;
-    pass `q` to filter that leaderboard by name, `min_live_ads` for the
-    "brands running 50+ ads" quality cut.
+    Signed-in only. Free plan sees the top FREE_BRAND_CAP brands (a teaser);
+    paid plans get the full leaderboard and the 50+-live-ads quality cut.
     """
+    plan = await get_plan(uid)
+    free = plan == "free"
+    if free:
+        limit = min(limit, FREE_BRAND_CAP)
+        min_live_ads = 0  # the quality filter is a paid lever
     es = get_es_client()
     try:
-        return await es_top_brands(es, q=q, country=country, min_live_ads=min_live_ads, limit=limit)
+        res = await es_top_brands(es, q=q, country=country, min_live_ads=min_live_ads, limit=limit)
     finally:
         await es.close()
+    res["plan"] = plan
+    if free:
+        res["results"] = res["results"][:FREE_BRAND_CAP]
+        res["total"] = min(res.get("total", 0), FREE_BRAND_CAP)
+        res["free_capped"] = True
+    return res
 
 
 @router.get("/{brand_id}/trajectory")
-async def get_brand_trajectory(brand_id: str):
+async def get_brand_trajectory(brand_id: str, uid: str = Depends(get_user_id)):
     """Deep-dive snapshot history for one brand: live-ad count over time.
 
     A rising series is the strongest observable "they found a winner and are
@@ -66,7 +78,7 @@ async def get_brand_trajectory(brand_id: str):
 
 
 @router.get("/{brand_id}/timeline")
-async def get_brand_timeline(brand_id: str):
+async def get_brand_timeline(brand_id: str, uid: str = Depends(get_user_id)):
     """Creative launch history: when each distinct creative went live, how long
     it survived, and how hard it was scaled — the Spyder-style cadence view.
 
@@ -118,8 +130,9 @@ async def get_brand_ads(
     brand_id: str,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    uid: str = Depends(get_user_id),
 ):
-    """Get all ads for a specific brand (by advertiser_id)."""
+    """Get all ads for a specific brand (by advertiser_id). Signed-in only."""
     es = get_es_client()
     try:
         return await es_brand_ads(es, advertiser_id=brand_id, page=page, limit=limit)

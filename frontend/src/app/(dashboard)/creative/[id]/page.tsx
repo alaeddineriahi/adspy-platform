@@ -9,7 +9,7 @@ import {
 import { SaveButton } from "@/components/ads/SaveButton";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
+import { authFetch, apiError, errMessage } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 import { fmtUsd } from "@/components/ads/AdCard";
 import { Ad } from "@/types";
@@ -38,14 +38,14 @@ export default function AdDetailPage() {
   const [script, setScript] = useState<ScriptResult | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/creatives/${id}`)
+    authFetch(getToken, `/api/creatives/${id}`)
       // A 404 body ({detail: "Ad not found"}) is truthy — passing it to setAd
       // renders an empty husk of a page instead of the not-found state.
       .then((r) => (r.ok ? r.json() : null))
       .then(setAd)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, getToken]);
 
   const copyText = () => {
     if (ad?.copy_text) {

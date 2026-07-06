@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Search, Loader2, TrendingUp } from "lucide-react";
+import { Search, Loader2, TrendingUp, Lock } from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import { AdCard } from "@/components/ads/AdCard";
 import { SkeletonCard } from "@/components/ads/SkeletonCard";
 import { PageHeader, Stagger } from "@/components/PageHeader";
+import { authFetch } from "@/lib/api";
 import { Ad } from "@/types";
 
 type Platform = "all" | "meta" | "tiktok";
@@ -12,9 +15,8 @@ type AdFormat = "all" | "image" | "video" | "carousel";
 type SortBy = "best_performing" | "newest" | "longest_running" | "relevance";
 type Momentum = "all" | "hot" | "proven" | "steady";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
 export default function SearchPage() {
+  const { getToken } = useAuth();
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState<Platform>("all");
   const [format, setFormat] = useState<AdFormat>("all");
@@ -30,6 +32,9 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
+  // Free-tier signals from the API so we can show honest upgrade prompts.
+  const [freeCapped, setFreeCapped] = useState(false);
+  const [resultCap, setResultCap] = useState(0);
 
   const doSearch = useCallback(async (p: number = 1, qOverride?: string) => {
     setLoading(true);
@@ -50,17 +55,19 @@ export default function SearchPage() {
     params.set("limit", "20");
 
     try {
-      const res = await fetch(`${API_URL}/api/creatives/search?${params}`);
+      const res = await authFetch(getToken, `/api/creatives/search?${params}`);
       const data = await res.json();
       setResults(data.results || []);
       setTotal(data.total || 0);
+      setFreeCapped(Boolean(data.free_capped));
+      setResultCap(data.result_cap || 0);
       setPage(p);
     } catch (err) {
       console.error("Search failed:", err);
     } finally {
       setLoading(false);
     }
-  }, [query, platform, format, country, sort, momentum, minDays, minVariants, minSpend]);
+  }, [query, platform, format, country, sort, momentum, minDays, minVariants, minSpend, getToken]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,8 +272,27 @@ export default function SearchPage() {
             ))}
           </div>
 
-          {/* Pagination */}
-          {total > 20 && (
+          {/* Free-tier wall: the money-ranked feed is capped, filters are locked */}
+          {freeCapped && (
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl p-5 text-white holo-gradient">
+              <div className="flex items-center gap-3">
+                <Lock className="w-5 h-5 shrink-0" />
+                <p className="text-sm font-semibold">
+                  You&apos;re seeing the top {resultCap} winners. Pro unlocks the full catalog,
+                  every market, and the scaling / spend / momentum filters.
+                </p>
+              </div>
+              <Link
+                href="/pricing"
+                className="shrink-0 px-5 py-2.5 bg-white text-[#1d1d1f] rounded-full text-sm font-bold hover:scale-[1.03] transition"
+              >
+                Unlock everything
+              </Link>
+            </div>
+          )}
+
+          {/* Pagination — free tier is single-page (capped), so hide it there */}
+          {!freeCapped && total > 20 && (
             <div className="flex items-center justify-center gap-2 mt-8">
               <button
                 onClick={() => doSearch(page - 1)}

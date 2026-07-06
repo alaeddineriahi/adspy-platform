@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Megaphone, Send, Loader2, Sparkles, RotateCcw, SlidersHorizontal, Check } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
+import { authFetch, apiError, errMessage } from "@/lib/api";
 import { useUsage } from "@/components/UsageProvider";
 
 const PROFILE_KEY = "adspy_buyer_profile";
@@ -176,7 +176,7 @@ export default function MediaBuyerPage() {
     const id = params.get("creative") || params.get("ad");
     if (id) {
       setAdId(id);
-      fetch(`${API_URL}/api/creatives/${id}`)
+      authFetch(getToken, `/api/creatives/${id}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((ad) => {
           if (ad) {
@@ -186,6 +186,7 @@ export default function MediaBuyerPage() {
         })
         .catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persist profile whenever it changes (after initial load).

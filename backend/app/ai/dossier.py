@@ -15,14 +15,20 @@ One click on a winner answers the only question a seller actually has:
 Costs 2 credits (the route enforces it); the ES parts cost us nothing.
 """
 
+import asyncio
 import json
 import logging
+import random
 import re
 from urllib.parse import quote_plus
 
+from urllib.parse import urlparse
+
+from app.ai.brand_intel import analyze_funnel
 from app.ai.script_generator import _call_llm
 from app.core.elasticsearch import get_es_client, find_similar_product_ads
 from app.ingestion.pipeline import DEFAULT_COUNTRIES, GLOBAL_COUNTRIES
+from app.ingestion.scraper import fetch_live_count
 
 logger = logging.getLogger("adspy.dossier")
 
@@ -111,17 +117,70 @@ _FR_MARKETS = {"TN", "MA", "DZ", "FR"}
 _AR_MARKETS = {"EG", "SA", "AE", "KW", "QA"}
 
 
+def _market_term(country: str, llm: dict, fallback: str) -> str:
+    """The product term a buyer in this market would actually search —
+    FR for the Maghreb/France, AR for Egypt/Gulf, EN elsewhere."""
+    if country in _FR_MARKETS:
+        return llm.get("product_keywords_fr") or fallback
+    if country in _AR_MARKETS:
+        return llm.get("product_keywords_ar") or llm.get("product_keywords_fr") or fallback
+    return llm.get("sourcing_search_term") or fallback
+
+
 def _adlib_verify_url(country: str, llm: dict, fallback: str) -> str:
     """Public Facebook Ad Library search for this product in one market —
     the one-click 'is our catalog missing something?' truth check."""
-    if country in _FR_MARKETS:
-        term = llm.get("product_keywords_fr") or fallback
-    elif country in _AR_MARKETS:
-        term = llm.get("product_keywords_ar") or llm.get("product_keywords_fr") or fallback
-    else:
-        term = llm.get("sourcing_search_term") or fallback
+    term = _market_term(country, llm, fallback)
     return ("https://www.facebook.com/ads/library/?active_status=active&ad_type=all"
             f"&country={country}&q={quote_plus(term)}&search_type=keyword_unordered&media_type=all")
+
+
+# Hosts that are ad-platform plumbing, not the seller's own store — a funnel
+# teardown of facebook.com would be nonsense.
+_NON_STORE_HOSTS = ("facebook.com", "fb.me", "fb.watch", "instagram.com",
+                    "tiktok.com", "whatsapp.com", "wa.me", "messenger.com")
+
+
+def _store_url(ad: dict) -> str | None:
+    """The winner's real landing page, if the ad links to an actual store."""
+    url = (ad.get("landing_page") or "").strip()
+    if not url.startswith("http"):
+        return None
+    host = (urlparse(url).hostname or "").lower()
+    if not host or any(host == h or host.endswith("." + h) for h in _NON_STORE_HOSTS):
+        return None
+    return url
+
+
+# Live-probe budget: how many catalog-open markets get a real Ad Library count
+# per dossier, and how long the whole pass may take before we ship without it.
+_PROBE_MAX_MARKETS = 4
+_PROBE_TIMEOUT_EACH = 8
+_PROBE_TIMEOUT_TOTAL = 22
+
+
+async def _probe_open_markets(open_markets: list[str], llm: dict, fallback: str) -> dict[str, int]:
+    """Real Ad Library live counts for markets our catalog calls open.
+
+    "Open in our catalog" only means we haven't indexed a winner there — the
+    claim a buyer acts on is "nobody is running this in TN *right now*", and
+    only Meta can confirm that. Probes run sequentially (one FB session,
+    burst-averse) in the market's own language; a missing/failed count stays
+    ABSENT, never a fake zero.
+    """
+    counts: dict[str, int] = {}
+    for c in open_markets[:_PROBE_MAX_MARKETS]:
+        try:
+            n = await asyncio.wait_for(
+                fetch_live_count(c, _market_term(c, llm, fallback)),
+                timeout=_PROBE_TIMEOUT_EACH,
+            )
+        except Exception:  # noqa: BLE001 — a probe must never sink the dossier
+            n = None
+        if n is not None:
+            counts[c] = n
+        await asyncio.sleep(random.uniform(0.4, 0.9))
+    return counts
 
 
 _SYSTEM = """You are a senior e-commerce product analyst for MENA dropshippers.
@@ -245,6 +304,13 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
         if llm.get("product_name"):
             break
 
+    # Funnel teardown of the winner's own store — launched here so it overlaps
+    # the ES query and the market probes below (independent I/O paths).
+    funnel_task = None
+    store_url = _store_url(ad)
+    if store_url:
+        funnel_task = asyncio.create_task(analyze_funnel(store_url))
+
     keywords = {
         "fr": llm.get("product_keywords_fr"),
         "ar": llm.get("product_keywords_ar"),
@@ -276,6 +342,18 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
         for c in [*open_mena, *open_global, *presence]
     }
 
+    # Live truth check on the open-market claim (the one buyers act on).
+    # DEFAULT_COUNTRIES order puts TN first — the home market gets probed first.
+    live_counts: dict[str, int] = {}
+    if open_mena:
+        try:
+            live_counts = await asyncio.wait_for(
+                _probe_open_markets(open_mena, llm, fallback_term),
+                timeout=_PROBE_TIMEOUT_TOTAL,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("live-count probe skipped for %s: %s", ad_id, e)
+
     # Server-side margin math — honest, and never trusts LLM arithmetic.
     margin = None
     pricing_hint = None
@@ -303,6 +381,16 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
                 "suggested_sell_usd_min": round(supply_mid * 3, 2),
                 "suggested_sell_usd_max": round(supply_mid * 4, 2),
             }
+
+    # Collect the funnel teardown (best-effort — a slow or JS-only store page
+    # must never sink the dossier).
+    funnel = None
+    if funnel_task:
+        try:
+            funnel = await asyncio.wait_for(funnel_task, timeout=25)
+        except Exception as e:  # noqa: BLE001
+            funnel_task.cancel()
+            logger.info("funnel teardown skipped for %s (%s)", ad_id, type(e).__name__)
 
     term = llm.get("sourcing_search_term") or llm.get("product_name") or ""
     # Tunisia-facing searches in FRENCH (fall back to the product name, which
@@ -359,8 +447,14 @@ async def generate_dossier(ad_id: str, ad: dict) -> dict:
             "saturation_meaning": sat_meaning,
             "brand_count": brand_count,
             "verify_urls": verify_urls,     # one-click live Ad Library check per market
+            # Real Ad Library totals probed at compile time for open markets:
+            # 0 = verified first-mover claim, >0 = live sellers our sweeps missed.
+            "live_counts": live_counts,
         },
         "competitors": similar["top_brands"],
+        # CRO teardown of the winner's own landing page (None when the ad has
+        # no real store URL or the page couldn't be read).
+        "funnel": funnel,
         "angles": llm.get("winning_angles") or [],
         "risk_notes": llm.get("risk_notes"),
         "verdict_line": llm.get("verdict_line"),

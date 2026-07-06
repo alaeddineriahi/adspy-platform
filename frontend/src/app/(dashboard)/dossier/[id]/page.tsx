@@ -33,8 +33,20 @@ interface Dossier {
     presence: Record<string, number>; open_mena: string[]; open_global: string[];
     saturation: string; saturation_meaning: string; brand_count: number;
     verify_urls?: Record<string, string>;
+    live_counts?: Record<string, number>;
   };
   competitors: { advertiser_name: string; advertiser_id?: string; total_variants: number; markets: string[]; max_heat: number }[];
+  funnel?: {
+    store_platform?: string | null;
+    offer?: string | null;
+    displayed_price?: string | null;
+    bundles_upsells?: string[];
+    cod_available?: boolean | null;
+    trust_elements?: string[];
+    weaknesses?: string[];
+    takeaway?: string;
+    source_url?: string;
+  } | null;
   angles: string[];
   risk_notes?: string;
   verdict_line?: string;
@@ -72,7 +84,7 @@ export default function DossierPage() {
   const [error, setError] = useState("");
   const [outOfCredits, setOutOfCredits] = useState(false);
 
-  const cacheKey = `adspy_dossier_v5_${id}`; // v5: verified TN labs, cosmetics tier, spy-similar link, server cache
+  const cacheKey = `adspy_dossier_v6_${id}`; // v6: live Ad Library counts on open markets
 
   useEffect(() => {
     if (!id) return;
@@ -260,21 +272,38 @@ export default function DossierPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {dossier.market_map.open_mena.map((c) => {
                       const v = dossier.market_map.verify_urls?.[c];
+                      const live = dossier.market_map.live_counts?.[c];
+                      // Probed live against Meta's Ad Library at compile time:
+                      // 0 = a verified first-mover claim; >0 = live sellers our
+                      // sweeps hadn't indexed; undefined = probe unavailable.
+                      const label =
+                        live === 0 ? `${c} · 0 live ✓` : typeof live === "number" ? `${c} · ${live} live ⚠` : `${c} ↗`;
+                      const cls =
+                        typeof live === "number" && live > 0
+                          ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                          : "border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100";
+                      const tip =
+                        live === 0
+                          ? "Verified against the live Ad Library: ZERO active ads for this product here — first-mover territory"
+                          : typeof live === "number"
+                          ? `${live} live ad${live === 1 ? "" : "s"} in the Ad Library right now — not in our winners catalog yet, so none has proven itself; click to inspect`
+                          : "No proven winner in our catalog here — click to check the live Ad Library yourself";
                       return v ? (
                         <a key={c} href={v} target="_blank" rel="noopener noreferrer"
-                           className="px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition"
-                           title="No proven winner in our catalog here — click to check the live Ad Library yourself">
-                          {c} ↗
+                           className={`px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed transition ${cls}`}
+                           title={tip}>
+                          {label}
                         </a>
                       ) : (
-                        <span key={c} className="px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed border-emerald-300 text-emerald-700 bg-emerald-50">
-                          {c}
+                        <span key={c} title={tip}
+                              className={`px-2 py-1 rounded-full text-[11px] font-bold border-2 border-dashed ${cls}`}>
+                          {label}
                         </span>
                       );
                     })}
                   </div>
                   <p className="text-[11px] text-gray-400 mt-2">
-                    &quot;Open&quot; = no proven winner in our catalog (top ~120 ads/market) — not a guarantee nobody sells it. The ↗ links open the live Facebook Ad Library search for that market.
+                    &quot;Open&quot; = no proven winner in our catalog. Markets marked <span className="font-semibold text-emerald-600">0 live ✓</span> were verified against Meta&apos;s live Ad Library when this dossier was compiled; <span className="font-semibold text-amber-600">N live ⚠</span> means ads run there but none has proven itself yet. The ↗ links open the live search.
                   </p>
                 </>
               )}
@@ -316,6 +345,56 @@ export default function DossierPage() {
                   </Link>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Funnel teardown — CRO dissection of the winner's own store page */}
+          {dossier.funnel && (
+            <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5 fade-up" style={{ ["--delay" as string]: "390ms" }}>
+              <h3 className="text-sm font-bold text-[#1d1d1f] mb-3 flex items-center gap-1.5">
+                <ExternalLink className="w-4 h-4 text-sky-500" /> Their funnel, dissected
+                {dossier.funnel.store_platform && (
+                  <span className="text-[11px] font-semibold text-gray-400 normal-case">· {dossier.funnel.store_platform}</span>
+                )}
+                {dossier.funnel.source_url && (
+                  <a href={dossier.funnel.source_url} target="_blank" rel="noopener noreferrer"
+                     className="ml-auto text-[11px] font-semibold text-sky-600 hover:underline">
+                    visit page ↗
+                  </a>
+                )}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                {dossier.funnel.offer && (
+                  <p><span className="text-gray-400">Offer:</span> <span className="font-medium text-gray-800">{dossier.funnel.offer}</span></p>
+                )}
+                {dossier.funnel.displayed_price && (
+                  <p><span className="text-gray-400">Price on page:</span> <span className="font-medium text-gray-800">{dossier.funnel.displayed_price}</span></p>
+                )}
+                {typeof dossier.funnel.cod_available === "boolean" && (
+                  <p><span className="text-gray-400">COD:</span> <span className="font-medium text-gray-800">{dossier.funnel.cod_available ? "✓ offered" : "not mentioned"}</span></p>
+                )}
+                {(dossier.funnel.bundles_upsells?.length ?? 0) > 0 && (
+                  <p><span className="text-gray-400">Upsells:</span> <span className="font-medium text-gray-800">{dossier.funnel.bundles_upsells!.join(" · ")}</span></p>
+                )}
+              </div>
+              {(dossier.funnel.trust_elements?.length ?? 0) > 0 && (
+                <p className="text-xs text-gray-500 mt-2.5">
+                  <span className="font-semibold text-gray-600">Trust they lean on:</span> {dossier.funnel.trust_elements!.join(" · ")}
+                </p>
+              )}
+              {(dossier.funnel.weaknesses?.length ?? 0) > 0 && (
+                <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-xl px-3.5 py-2.5">
+                  <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide mb-1">⚔️ Where to beat them</p>
+                  <ul className="text-sm text-emerald-900 space-y-1">
+                    {dossier.funnel.weaknesses!.map((w, i) => (
+                      <li key={i} className="flex gap-1.5"><span>•</span> {w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {dossier.funnel.takeaway && (
+                <p className="text-sm font-semibold text-[#1d1d1f] mt-3">💡 {dossier.funnel.takeaway}</p>
+              )}
             </div>
           )}
 

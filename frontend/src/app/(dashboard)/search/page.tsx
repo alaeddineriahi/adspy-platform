@@ -10,6 +10,7 @@ import { Ad } from "@/types";
 type Platform = "all" | "meta" | "tiktok";
 type AdFormat = "all" | "image" | "video" | "carousel";
 type SortBy = "best_performing" | "newest" | "longest_running" | "relevance";
+type Momentum = "all" | "hot" | "proven" | "steady";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -19,6 +20,11 @@ export default function SearchPage() {
   const [format, setFormat] = useState<AdFormat>("all");
   const [country, setCountry] = useState("all");
   const [sort, setSort] = useState<SortBy>("best_performing");
+  // Signal filters — cuts over the scaling/longevity/spend data we compute.
+  const [momentum, setMomentum] = useState<Momentum>("all");
+  const [minDays, setMinDays] = useState(0);
+  const [minVariants, setMinVariants] = useState(0);
+  const [minSpend, setMinSpend] = useState(0);
   const [results, setResults] = useState<Ad[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -35,6 +41,10 @@ export default function SearchPage() {
     if (platform !== "all") params.set("platform", platform);
     if (format !== "all") params.set("format", format);
     if (country !== "all") params.set("country", country);
+    if (momentum !== "all") params.set("momentum", momentum);
+    if (minDays) params.set("min_days", String(minDays));
+    if (minVariants) params.set("min_variants", String(minVariants));
+    if (minSpend) params.set("min_spend", String(minSpend));
     params.set("sort", sort);
     params.set("page", String(p));
     params.set("limit", "20");
@@ -50,7 +60,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, platform, format, country, sort]);
+  }, [query, platform, format, country, sort, momentum, minDays, minVariants, minSpend]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +87,7 @@ export default function SearchPage() {
     doSearch(1, deepLinkQ.current ?? undefined);
     deepLinkQ.current = null; // only the very first search uses the deep link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform, format, country, sort]);
+  }, [platform, format, country, sort, momentum, minDays, minVariants, minSpend]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -155,6 +165,52 @@ export default function SearchPage() {
             <option value="AU">Australia</option>
             <option value="FR">France</option>
           </optgroup>
+        </select>
+
+        <select
+          value={momentum}
+          onChange={(e) => setMomentum(e.target.value as Momentum)}
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
+        >
+          <option value="all">All signals</option>
+          <option value="hot">🔥 Scaling fast</option>
+          <option value="proven">💎 Proven winners</option>
+          <option value="steady">Steady</option>
+        </select>
+
+        <select
+          value={minDays}
+          onChange={(e) => setMinDays(Number(e.target.value))}
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
+        >
+          <option value={0}>Any age</option>
+          <option value={7}>Running 7+ days</option>
+          <option value={30}>Running 30+ days</option>
+          <option value={90}>Running 90+ days</option>
+          <option value={180}>Running 180+ days</option>
+        </select>
+
+        <select
+          value={minVariants}
+          onChange={(e) => setMinVariants(Number(e.target.value))}
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
+        >
+          <option value={0}>Any scaling</option>
+          <option value={3}>3+ variants</option>
+          <option value={5}>5+ variants</option>
+          <option value={10}>10+ variants</option>
+          <option value={20}>20+ variants</option>
+        </select>
+
+        <select
+          value={minSpend}
+          onChange={(e) => setMinSpend(Number(e.target.value))}
+          className="px-4 py-2.5 border border-[#e6e6e7] rounded-full text-sm bg-white cursor-pointer hover:border-[#1d1d1f] transition"
+        >
+          <option value={0}>Any budget</option>
+          <option value={1000}>Est. $1k+ spend</option>
+          <option value={10000}>Est. $10k+ spend</option>
+          <option value={50000}>Est. $50k+ spend</option>
         </select>
 
         <select

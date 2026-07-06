@@ -24,6 +24,7 @@ from app.ingestion.pipeline import (
 )
 from app.ingestion.session import session_available, describe_source, set_manual_cookie
 from app.ingestion.scraper import import_search_template, has_search_template
+from app.ingestion.tiktok import TT_LAST_RUN, ingest_tiktok_top_ads, tiktok_countries
 
 logger = logging.getLogger("adspy.ingest.api")
 # Every route needs the FB session cookie or triggers real scraping — gate
@@ -98,6 +99,28 @@ async def run_ingestion(req: RunRequest, background: BackgroundTasks):
     }
 
 
+class TikTokRunRequest(BaseModel):
+    countries: Optional[list[str]] = None
+    limit_per_country: Optional[int] = None
+
+
+@router.post("/tiktok/run")
+async def run_tiktok(req: TikTokRunRequest, background: BackgroundTasks):
+    """Trigger a TikTok Creative Center top-ads sweep (headless browser)."""
+    if TT_LAST_RUN.get("status") == "running":
+        return {"started": False, "note": "A TikTok sweep is already running."}
+    background.add_task(
+        ingest_tiktok_top_ads,
+        countries=req.countries,
+        limit_per_country=req.limit_per_country,
+    )
+    return {
+        "started": True,
+        "countries": req.countries or tiktok_countries(),
+        "note": "TikTok sweep running in background; poll GET /api/ingestion/status.",
+    }
+
+
 @router.get("/status")
 async def ingestion_status():
     return {
@@ -105,6 +128,11 @@ async def ingestion_status():
         "session": describe_source(),
         "template_captured": has_search_template(),
         "last_run": LAST_RUN,
+        "tiktok": {
+            "enabled": bool(getattr(settings, "TIKTOK_ENABLED", True)),
+            "countries": tiktok_countries(),
+            "last_run": TT_LAST_RUN,
+        },
     }
 
 

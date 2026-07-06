@@ -27,7 +27,11 @@ export interface Ad {
   first_seen: string;
   last_seen: string;
   is_active: boolean;
-  days_running: number;
+  days_running?: number;                      // absent on TikTok top ads (unknowable)
+  // TikTok engagement — the Creative Center publishes what Meta hides
+  likes?: number;
+  ctr?: number;                               // percentage figure, e.g. 0.45
+  video_duration?: number;
 }
 
 export interface Brand {

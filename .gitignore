@@ -54,3 +54,4 @@ backend/.fb_session.json
 # Captured Ad Library GraphQL request template (contains session tokens)
 .adlib_query.json
 backend/.adlib_query.json
+backend/tools/node_modules/

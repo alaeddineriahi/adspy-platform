@@ -15,6 +15,29 @@ interface TrajectoryPoint {
   at: string | null;
 }
 
+interface TimelineCreative {
+  id: string;
+  copy_excerpt: string;
+  thumbnail?: string;
+  days_running?: number;
+  is_active: boolean;
+  variant_count?: number;
+  momentum?: string;
+}
+
+interface TimelineMonth {
+  month: string; // "2026-05"
+  launched: number;
+  still_active: number;
+  creatives: TimelineCreative[];
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function monthLabel(m: string): string {
+  const [y, mo] = m.split("-").map(Number);
+  return Number.isFinite(mo) ? `${MONTH_NAMES[mo - 1]} ${String(y).slice(2)}` : m;
+}
+
 export default function BrandDetailPage() {
   const { id } = useParams();
   const { getToken } = useAuth();
@@ -23,6 +46,7 @@ export default function BrandDetailPage() {
   const [loading, setLoading] = useState(true);
   const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
   const [growth, setGrowth] = useState<number | null>(null);
+  const [timeline, setTimeline] = useState<TimelineMonth[]>([]);
   const [watched, setWatched] = useState(false);
   const [togglingWatch, setTogglingWatch] = useState(false);
 
@@ -43,6 +67,10 @@ export default function BrandDetailPage() {
         setGrowth(d.growth ?? null);
       })
       .catch(() => setTrajectory([]));
+    fetch(`${API_URL}/api/brands/${id}/timeline`)
+      .then((r) => (r.ok ? r.json() : { months: [] }))
+      .then((d) => setTimeline(d.months || []))
+      .catch(() => setTimeline([]));
     authFetch(getToken, "/api/brands/watchlist")
       .then((r) => (r.ok ? r.json() : { brands: [] }))
       .then((d: { brands: { brand_id: string }[] }) =>
@@ -161,6 +189,64 @@ export default function BrandDetailPage() {
             </span>
             {countries.length > 0 && <span>{countries.join(" · ")}</span>}
           </div>
+
+          {/* Creative launch timeline — the brand's testing cadence at a glance */}
+          {timeline.length >= 2 && (
+            <div className="bg-white border border-[#e6e6e7] rounded-2xl p-5 mb-6 fade-up" style={{ ["--delay" as string]: "120ms" }}>
+              <h3 className="text-sm font-bold text-[#1d1d1f] mb-1 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-violet-500" /> Creative launch history
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                When each creative went live and which survived — bursts of short-lived launches followed by a long
+                runner are this brand&apos;s winning-test pattern.
+              </p>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {timeline.map((m) => (
+                  <div key={m.month} className="shrink-0 w-36 border border-[#f0f0f1] rounded-xl p-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase">{monthLabel(m.month)}</p>
+                    <p className="text-lg font-black text-[#1d1d1f] leading-tight">
+                      {m.launched}
+                      <span className="text-[11px] font-semibold text-gray-400"> launched</span>
+                    </p>
+                    <p className={`text-[11px] font-semibold mb-2 ${m.still_active ? "text-emerald-600" : "text-gray-400"}`}>
+                      {m.still_active ? `${m.still_active} still alive` : "all killed"}
+                    </p>
+                    <div className="flex -space-x-2">
+                      {m.creatives.slice(0, 4).map((c) =>
+                        c.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={c.id}
+                            src={c.thumbnail}
+                            alt=""
+                            title={`${c.copy_excerpt}${c.is_active ? " · still live" : " · killed"}`}
+                            onClick={() => (window.location.href = `/creative/${c.id}`)}
+                            className={`w-8 h-8 rounded-lg object-cover border-2 cursor-pointer hover:scale-110 transition ${
+                              c.is_active ? "border-emerald-400" : "border-gray-200 grayscale"
+                            }`}
+                          />
+                        ) : (
+                          <span
+                            key={c.id}
+                            title={c.copy_excerpt}
+                            onClick={() => (window.location.href = `/creative/${c.id}`)}
+                            className={`w-8 h-8 rounded-lg border-2 bg-gray-100 cursor-pointer ${
+                              c.is_active ? "border-emerald-400" : "border-gray-200"
+                            }`}
+                          />
+                        ),
+                      )}
+                      {m.creatives.length > 4 && (
+                        <span className="w-8 h-8 rounded-lg border-2 border-white bg-gray-900 text-white text-[10px] font-bold flex items-center justify-center">
+                          +{m.creatives.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {ads.map((ad, i) => (

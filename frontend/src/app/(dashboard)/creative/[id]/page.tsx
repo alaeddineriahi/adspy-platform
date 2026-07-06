@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
-  ArrowLeft, Bookmark, ExternalLink, Clock, Globe, Zap,
+  ArrowLeft, ExternalLink, Clock, Globe, Zap,
   Copy, CheckCheck, Loader2, Calendar, Package
 } from "lucide-react";
+import { SaveButton } from "@/components/ads/SaveButton";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { authFetch, apiError, errMessage, API_URL } from "@/lib/api";
@@ -142,9 +143,21 @@ export default function AdDetailPage() {
 
           <h1 className="text-xl font-black tracking-tight text-[#1d1d1f] mb-1">{ad.advertiser_name}</h1>
 
-          <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+          <div className="flex items-center gap-4 text-sm text-gray-500 mb-4 flex-wrap">
             <span className="flex items-center gap-1"><Globe className="w-4 h-4" />{ad.country}</span>
-            <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{ad.days_running}d running</span>
+            {typeof ad.days_running === "number" && ad.days_running > 0 && (
+              <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{ad.days_running}d running</span>
+            )}
+            {typeof ad.likes === "number" && ad.likes > 0 && (
+              <span className="flex items-center gap-1 text-rose-500" title="Real likes — TikTok Creative Center">
+                ❤ {ad.likes.toLocaleString()}
+              </span>
+            )}
+            {typeof ad.ctr === "number" && ad.ctr > 0 && (
+              <span className="flex items-center gap-1 text-sky-600" title="Real click-through rate — TikTok Creative Center">
+                CTR {ad.ctr}%
+              </span>
+            )}
             <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{ad.first_seen?.slice(0, 10)}</span>
           </div>
 
@@ -201,9 +214,7 @@ export default function AdDetailPage() {
             </button>
 
             <div className="flex gap-3">
-              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-300 rounded-xl text-sm hover:bg-gray-50">
-                <Bookmark className="w-4 h-4" /> Save
-              </button>
+              <SaveButton adId={String(id)} />
               {ad.landing_page && (
                 <a
                   href={ad.landing_page}

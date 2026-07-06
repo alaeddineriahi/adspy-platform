@@ -7,19 +7,23 @@ enforced by the get_user_id dependency — the old spoofable X-User-Id header
 is no longer trusted (except in DEBUG when Clerk isn't configured at all).
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
 from sqlalchemy import select, delete, func
 
 from app.core.auth import get_user_id
-from app.core.credits import get_usage as credits_usage
+from app.core.credits import _active_subscription, get_usage as credits_usage
 from app.core.database import async_session
 from app.core.elasticsearch import get_es_client
 from app.models.saved import SavedAd
 
 router = APIRouter()
+
+# Free-tier swipe-file cap (PRICING.md §2: "Saved boards — 10 / unlimited").
+# Counts DISTINCT ads, not rows: the same ad on two boards is one saved ad.
+FREE_SAVED_CAP = 10
 
 
 class SaveRequest(BaseModel):
@@ -27,34 +31,66 @@ class SaveRequest(BaseModel):
     board: str = "Default"
 
 
+class UnsaveRequest(BaseModel):
+    ad_id: str
+    board: Optional[str] = None  # None = remove from EVERY board
+
+
 @router.post("/save")
 async def save_ad(req: SaveRequest, uid: str = Depends(get_user_id)):
-    """Save an ad to a board (idempotent)."""
+    """Save an ad to a board (idempotent). Free plan caps the swipe file."""
+    board = (req.board or "Default").strip()[:48] or "Default"
     async with async_session() as db:
         exists = await db.scalar(
             select(SavedAd.id).where(
                 SavedAd.user_id == uid,
                 SavedAd.ad_id == req.ad_id,
-                SavedAd.board == req.board,
+                SavedAd.board == board,
             )
         )
-        if not exists:
-            db.add(SavedAd(user_id=uid, ad_id=req.ad_id, board=req.board))
-            await db.commit()
-    return {"status": "saved", "board": req.board, "ad_id": req.ad_id}
+        if exists:
+            return {"status": "saved", "board": board, "ad_id": req.ad_id}
+
+        plan, _bonus = await _active_subscription(db, uid)
+        if plan == "free":
+            distinct_ads = await db.scalar(
+                select(func.count(func.distinct(SavedAd.ad_id)))
+                .where(SavedAd.user_id == uid)
+            ) or 0
+            # Re-boarding an already-saved ad never counts against the cap.
+            already = await db.scalar(
+                select(func.count()).select_from(SavedAd).where(
+                    SavedAd.user_id == uid, SavedAd.ad_id == req.ad_id
+                )
+            ) or 0
+            if distinct_ads >= FREE_SAVED_CAP and not already:
+                raise HTTPException(status_code=402, detail={
+                    "error": "saved_cap",
+                    "message": f"The free plan holds {FREE_SAVED_CAP} saved ads. "
+                               "Upgrade to Pro for an unlimited swipe file.",
+                })
+
+        db.add(SavedAd(user_id=uid, ad_id=req.ad_id, board=board))
+        await db.commit()
+    return {"status": "saved", "board": board, "ad_id": req.ad_id}
 
 
 @router.post("/unsave")
-async def unsave_ad(req: SaveRequest, uid: str = Depends(get_user_id)):
-    """Remove an ad from a board (idempotent)."""
+async def unsave_ad(req: UnsaveRequest, uid: str = Depends(get_user_id)):
+    """Remove an ad from one board, or from every board when none is given.
+
+    The board-less form exists for the bookmark toggle: it must remove the ad
+    no matter which board it was saved to (a "Default"-only delete silently
+    left ads saved on other boards, and they reappeared on the next refresh).
+    """
     async with async_session() as db:
-        await db.execute(
-            delete(SavedAd).where(
-                SavedAd.user_id == uid,
-                SavedAd.ad_id == req.ad_id,
-                SavedAd.board == req.board,
-            )
+        q = delete(SavedAd).where(
+            SavedAd.user_id == uid,
+            SavedAd.ad_id == req.ad_id,
         )
+        if req.board:
+            q = q.where(SavedAd.board == req.board)
+        await db.execute(q)
         await db.commit()
     return {"status": "removed", "board": req.board, "ad_id": req.ad_id}
 

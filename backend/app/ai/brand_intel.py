@@ -148,3 +148,35 @@ async def analyze_website(url: str) -> dict:
     data = json.loads(result)
     data["source_url"] = final_url
     return data
+
+
+_FUNNEL_SYSTEM = """You are a conversion-rate expert dissecting a competitor's landing page
+for a seller who wants to BEAT this funnel with their own version of the product.
+Base everything on the page text; if something isn't there, use null/[] — never invent.
+Return STRICT JSON with exactly these keys:
+{
+  "store_platform": str|null,          // shopify / youcan / converty / woocommerce / custom, if detectable
+  "offer": str|null,                   // the main offer as pitched (e.g. "2+1 free, 49 DT, free delivery")
+  "displayed_price": str|null,         // price literally on the page, with currency
+  "bundles_upsells": [str],            // bundles, quantity breaks, cross-sells found
+  "cod_available": true|false|null,    // cash-on-delivery mentioned?
+  "trust_elements": [str],             // reviews, guarantees, badges, delivery promises found
+  "weaknesses": [str],                 // up to 4 SPECIFIC attack points (missing proof, weak offer, no urgency, slow shipping…)
+  "takeaway": str                      // one sentence: how to out-convert this page
+}
+JSON only, no commentary."""
+
+
+async def analyze_funnel(url: str) -> dict:
+    """Landing-page funnel teardown for the Product Dossier — what the winner's
+    own store does (offer, price ladder, trust) and where it's beatable."""
+    final_url, html = await _fetch_html(url)
+    content = _extract_content(html)
+    if len(content) < 200:
+        raise FetchError("Page has no readable text (JS-only site).")
+    result = await _call_llm(_FUNNEL_SYSTEM, f"LANDING PAGE: {final_url}\n\n{content}")
+    import json
+
+    data = json.loads(result)
+    data["source_url"] = final_url
+    return data

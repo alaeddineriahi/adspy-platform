@@ -1,7 +1,7 @@
 "use client";
 
 import { Ad } from "@/types";
-import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem, CircleDollarSign, Package } from "lucide-react";
+import { Bookmark, ExternalLink, Clock, Globe, Layers, TrendingUp, Megaphone, Play, Flame, Gem, CircleDollarSign, Package, Heart, MousePointerClick } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useSaved } from "@/components/SavedProvider";
@@ -139,10 +139,24 @@ export function AdCard({ ad }: { ad: Ad }) {
           </p>
         )}
         <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="flex items-center gap-1" title="Days the creative has stayed live">
-            <Clock className="w-3 h-3" />
-            {ad.days_running}d
-          </span>
+          {typeof ad.days_running === "number" && ad.days_running > 0 && (
+            <span className="flex items-center gap-1" title="Days the creative has stayed live">
+              <Clock className="w-3 h-3" />
+              {ad.days_running}d
+            </span>
+          )}
+          {typeof ad.likes === "number" && ad.likes > 0 && (
+            <span className="flex items-center gap-1 text-rose-500" title="Real likes (TikTok Creative Center)">
+              <Heart className="w-3 h-3" />
+              {ad.likes >= 1000 ? `${(ad.likes / 1000).toFixed(1).replace(/\.0$/, "")}k` : ad.likes}
+            </span>
+          )}
+          {typeof ad.ctr === "number" && ad.ctr > 0 && (
+            <span className="flex items-center gap-1 text-sky-600" title="Real click-through rate (TikTok Creative Center)">
+              <MousePointerClick className="w-3 h-3" />
+              {ad.ctr}%
+            </span>
+          )}
           {typeof ad.variant_count === "number" && ad.variant_count > 1 && (
             <span className="flex items-center gap-1 text-emerald-600" title="Creative variants running (scaling = budget)">
               <Layers className="w-3 h-3" />

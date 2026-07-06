@@ -91,6 +91,14 @@ class Settings(BaseSettings):
     INGEST_DEEPDIVE_MAX_KEEP: int = 30        # max catalog ads indexed per brand
     INGEST_DEEPDIVE_COOLDOWN_HOURS: int = 24
 
+    # TikTok Creative Center "Top Ads" (headless-browser fetcher — needs Node
+    # + Edge/Chrome on the host; see backend/tools/tiktok_topads.mjs).
+    TIKTOK_ENABLED: bool = True
+    TIKTOK_COUNTRIES: str = ""          # default: US,GB,FR,SA,AE,EG
+    TIKTOK_MAX_PER_COUNTRY: int = 40
+    TIKTOK_PERIOD_DAYS: int = 30
+    TIKTOK_INTERVAL_HOURS: float = 24   # a browser launch per run — daily is plenty
+
     # Best-performing thresholds
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3

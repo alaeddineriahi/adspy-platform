@@ -492,6 +492,23 @@ async def fetch_page_ads(
     return ads, live
 
 
+async def fetch_live_count(country: str, search_term: str) -> Optional[int]:
+    """Meta's own "~N results" total for a keyword search in one market —
+    the truth behind any "nobody runs this there" claim (dossier gap map).
+
+    One page, tiny limit; only an EXPLICIT total from the response counts.
+    None means "couldn't verify" (dead session, missing total, block) — the
+    caller must stay silent rather than claim an unverified zero.
+    """
+    if not search_term:
+        return None
+    sess = await get_session()
+    if sess is None or not has_search_template():
+        return None
+    _ads, total = await _fetch_graphql(sess, country, search_term, limit=10, max_pages=1)
+    return total
+
+
 async def fetch_ads(
     country: str,
     search_term: str = "",

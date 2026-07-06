@@ -15,6 +15,7 @@ import logging
 
 from app.core.config import settings
 from app.ingestion.pipeline import ingest_best_performing, sweep_countries
+from app.ingestion.tiktok import ingest_tiktok_top_ads, tiktok_countries
 
 logger = logging.getLogger("adspy.scheduler")
 
@@ -26,6 +27,13 @@ async def _run_job():
         await ingest_best_performing()  # defaults to sweep_countries(): all markets
     except Exception as e:  # noqa: BLE001 — never let a bad run kill the scheduler
         logger.exception("Scheduled ingestion failed: %s", e)
+
+
+async def _run_tiktok_job():
+    try:
+        await ingest_tiktok_top_ads()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Scheduled TikTok ingestion failed: %s", e)
 
 
 def start_scheduler() -> None:
@@ -50,10 +58,24 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
+    if bool(getattr(settings, "TIKTOK_ENABLED", True)):
+        tt_hours = float(getattr(settings, "TIKTOK_INTERVAL_HOURS", 24))
+        _scheduler.add_job(
+            _run_tiktok_job,
+            trigger=IntervalTrigger(hours=tt_hours),
+            id="ingest_tiktok_top_ads",
+            next_run_time=None,
+            max_instances=1,
+            coalesce=True,
+        )
+
     _scheduler.start()
     logger.info(
-        "Ingestion scheduler started — every %.1fh across %s.",
+        "Ingestion scheduler started — Meta every %.1fh across %s%s.",
         hours, ",".join(sweep_countries()),
+        (f"; TikTok every {float(getattr(settings, 'TIKTOK_INTERVAL_HOURS', 24)):.0f}h "
+         f"across {','.join(tiktok_countries())}"
+         if bool(getattr(settings, "TIKTOK_ENABLED", True)) else ""),
     )
 
 

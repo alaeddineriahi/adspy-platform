@@ -173,6 +173,32 @@ def _assign_variant_counts(ads: list[RawAd]) -> None:
         ad.variant_count = max(ad.variant_count, groups[_norm_key(ad)])
 
 
+def _dedupe_creatives(
+    kept: list[tuple[RawAd, "object"]],
+) -> list[tuple[RawAd, "object"]]:
+    """One indexed doc per creative per market.
+
+    Collated near-duplicates of one creative each arrive as their own ad_id,
+    every copy carrying the GROUP's variant_count. Indexing them all burns
+    per-market cap slots on copies (search collapses them anyway — a heavily
+    collated page once filled a 30-ad deep-dive budget with 30 copies of one
+    ad) and multiplies the creative's scaling into every brand aggregate
+    (sum(variant_count) counted a 90-variant creative 30×).
+
+    Keep the best-scoring representative — its variant_count already encodes
+    the multiplicity. The market stays in the key: the same creative running
+    in SA and KW under different ad_ids keeps one doc per market, so
+    cross-market presence (gap maps, country filters) survives.
+    """
+    best: dict[tuple[str, str], tuple[RawAd, object]] = {}
+    for ad, s in kept:
+        key = (creative_key(ad.page_id, ad.primary_text), ad.country)
+        cur = best.get(key)
+        if cur is None or s.score > cur[1].score:
+            best[key] = (ad, s)
+    return list(best.values())
+
+
 def _to_doc(ad: RawAd, score) -> dict:
     text = ad.primary_text
     now = datetime.now(timezone.utc).isoformat()
@@ -255,7 +281,9 @@ async def _build_doc(ad: RawAd, s, sem: asyncio.Semaphore) -> dict:
 
     # Honest spend estimate (wide band, labeled). Upgraded in place to a
     # reach-based figure for EU ads when enrichment data is available.
-    lo, hi, basis = estimate_spend(ad.country, s.days_running, s.variant_count)
+    lo, hi, basis = estimate_spend(
+        ad.country, s.days_running, s.variant_count, velocity=velocity
+    )
     doc["est_spend_min_usd"] = lo
     doc["est_spend_max_usd"] = hi
     doc["spend_basis"] = basis
@@ -389,6 +417,9 @@ async def _deep_dive_pass(
         uniq = list({ad.ad_id: ad for ad in ads}.values())
         _assign_variant_counts(uniq)
         kept = [(ad, s) for ad in uniq if (s := score_ad(ad, now_ts)).keep]
+        # Distinct creatives only: page catalogs are collation-heavy, and the
+        # max_keep budget must buy 30 different ads, not 30 copies of one.
+        kept = _dedupe_creatives(kept)
         kept.sort(key=lambda t: t[1].score, reverse=True)
         kept = kept[:max_keep]
 
@@ -524,7 +555,9 @@ async def _run_sweep(
             kept.append((ad, s))
 
     # 4) Rank by score, cap per country (keep only the very best per market —
-    # trend markets get their own, lower cap).
+    # trend markets get their own, lower cap). Dedupe to one doc per creative
+    # per market first, so cap slots buy distinct winners, never collated copies.
+    kept = _dedupe_creatives(kept)
     kept.sort(key=lambda t: t[1].score, reverse=True)
     per_country_count: dict[str, int] = {}
     final: list[tuple[RawAd, object]] = []

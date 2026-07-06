@@ -15,6 +15,7 @@ We keep an ad only if it looks like a *winner* worth spying on:
 Thresholds are tunable via settings (INGEST_MIN_DAYS_RUNNING, etc.).
 """
 
+import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -112,6 +113,19 @@ def _days_running(start_ts: Optional[int], end_ts: Optional[int], now_ts: int) -
     return max(0, int((end - start_ts) // 86400))
 
 
+def _scale_signal(variants: int, cap: int = 25) -> float:
+    """0..1 scaling contribution from the variant count, log-compressed.
+
+    Variant counts are heavy-tailed: real ad-set duplication lives in the
+    3–25 range, while catalog/DCO collation inflates counts to 50–90+ for a
+    single creative. A linear ramp made 25 collated copies indistinguishable
+    from 25 deliberate duplications and let the inflated tail dominate; log
+    keeps discrimination where sellers actually operate (3 variants ≈ 0.42,
+    10 ≈ 0.74, 25+ = 1.0) and flattens the automation tail.
+    """
+    return min(math.log1p(max(variants, 0)) / math.log1p(cap), 1.0)
+
+
 def _classify_ecommerce(text: str, link_url: str = "", cta: str = "") -> tuple[bool, int, bool, str]:
     """Return (is_ecommerce, ecom_signal_count, strong_commerce, spam_reason).
 
@@ -169,7 +183,7 @@ def compute_heat(
     """
     velocity = round(variants / max(days, 7) * 30, 1)
     vel_c = min(velocity, 10) / 10
-    scale_c = min(variants, 25) / 25
+    scale_c = _scale_signal(variants)
     ecom_c = min(ecom_signals, 5) / 5
     age_c = min(days, 90) / 90 if days <= 90 else max(0.4, 1 - (days - 90) / 500)
 
@@ -216,7 +230,7 @@ def score_ad(ad: RawAd, now_ts: Optional[int] = None) -> AdScore:
     #   • COMMERCE strength (25%) confirms it's a product that actually sells.
     # Confirmed sellers (real storefront / price) get a small boost.
     days_c = min(days, 180) / 180
-    scale_c = min(variants, 25) / 25
+    scale_c = _scale_signal(variants)
     ecom_c = min(ecom_signals, 5) / 5
     base = 100 * (0.30 * days_c + 0.45 * scale_c + 0.25 * ecom_c)
     if strong_commerce:

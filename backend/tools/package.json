@@ -1,0 +1,9 @@
+{
+  "name": "adspy-backend-tools",
+  "private": true,
+  "description": "Headless-browser fetchers the Python backend shells out to (TikTok Creative Center).",
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "^1.45.0"
+  }
+}

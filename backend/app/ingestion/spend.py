@@ -52,6 +52,7 @@ def estimate_spend(
     days: int,
     variants: int,
     eu_total_reach: int | None = None,
+    velocity: float | None = None,
 ) -> tuple[int, int, str]:
     """Returns (min_usd, max_usd, basis) — basis is "reach" or "heuristic"."""
     if eu_total_reach and eu_total_reach > 0:
@@ -63,5 +64,13 @@ def estimate_spend(
 
     daily = _DAILY_PER_VARIANT_USD.get(country, _DEFAULT_DAILY)
     spend_days = min(max(days, 1), 365)
-    mid = max(1, variants) * daily * spend_days
+    # Variants accumulate over an ad's life — today's count wasn't live from
+    # day one, so the average concurrent footprint is a fraction of it.
+    concurrent = max(1.0, variants * 0.7)
+    # Velocity anchors intensity: an ad multiplying variants right now
+    # (velocity ≥ 10/mo) is running full market budgets; a coasting long-runner
+    # (28 variants over 600 days) sits near maintenance budgets. Without a
+    # velocity reading, stay at the old neutral behavior (1.0).
+    intensity = 1.0 if velocity is None else 0.5 + 0.5 * min(max(velocity, 0), 10) / 10
+    mid = concurrent * daily * intensity * spend_days
     return _round_band(mid * 0.35), _round_band(mid * 1.3), "heuristic"

@@ -93,6 +93,12 @@ ADS_INDEX_MAPPING = {
             "ecom_signals": {"type": "integer"},
             "is_ecommerce": {"type": "boolean"},
             "strong_commerce": {"type": "boolean"},
+            # TikTok engagement (Creative Center publishes what Meta hides)
+            "likes": {"type": "long"},
+            "ctr": {"type": "float"},           # percentage figure, e.g. 0.45
+            "video_duration": {"type": "float"},
+            "tt_industry": {"type": "keyword"},
+            "tt_objective": {"type": "keyword"},
             # Media
             "media_urls": {"type": "keyword", "index": False},
             # Nested metadata
@@ -111,13 +117,23 @@ def get_es_client() -> AsyncElasticsearch:
 
 
 async def setup_index(es: AsyncElasticsearch):
-    """Create the ads index if it doesn't exist."""
+    """Create the ads index, or upgrade an existing one with new fields.
+
+    put_mapping is additive-only (existing fields are never touched), so newly
+    introduced fields (e.g. the TikTok engagement block) land on live indexes
+    without a reindex; ES rejects any conflicting change loudly.
+    """
     exists = await es.indices.exists(index="ads")
     if not exists:
         await es.indices.create(index="ads", body=ADS_INDEX_MAPPING)
         print("Created 'ads' index")
-    else:
-        print("'ads' index already exists")
+        return
+    try:
+        await es.indices.put_mapping(
+            index="ads", body=ADS_INDEX_MAPPING["mappings"]
+        )
+    except Exception as e:  # noqa: BLE001 — an upgrade hiccup must not stop a sweep
+        print(f"'ads' mapping upgrade skipped: {e}")
 
 
 async def search_ads(
@@ -128,6 +144,10 @@ async def search_ads(
     language: str = None,
     ad_format: str = None,
     is_active: bool = None,
+    momentum: str = None,
+    min_days: int = None,
+    min_variants: int = None,
+    min_spend: int = None,
     sort: str = "newest",
     page: int = 1,
     limit: int = 20,
@@ -170,6 +190,19 @@ async def search_ads(
         filter_clauses.append({"term": {"ad_format": ad_format}})
     if is_active is not None:
         filter_clauses.append({"term": {"is_active": is_active}})
+    # Power filters over signals we already compute — the "show me only ads
+    # that are provably scaling / proven / big-budget" cuts every serious
+    # spy tool offers.
+    if momentum:
+        filter_clauses.append({"term": {"momentum": momentum}})
+    if min_days:
+        filter_clauses.append({"range": {"days_running": {"gte": min_days}}})
+    if min_variants:
+        filter_clauses.append({"range": {"variant_count": {"gte": min_variants}}})
+    if min_spend:
+        # Filter on the band's UPPER bound: "could plausibly have spent this
+        # much" keeps honest wide bands from hiding real spenders.
+        filter_clauses.append({"range": {"est_spend_max_usd": {"gte": min_spend}}})
 
     # Build query
     query = {"bool": {}}
@@ -251,11 +284,16 @@ async def get_brand_ads(
         "sort": [{"first_seen": "desc"}],
         "from": (page - 1) * limit,
         "size": limit,
+        # One card per creative — heavily collated pages (and pre-dedupe data)
+        # otherwise render a wall of identical ads on the brand page.
+        "collapse": {"field": "creative_key"},
+        "aggs": {"groups": {"cardinality": {"field": "creative_key"}}},
     }
 
     result = await es.search(index="ads", body=body)
     hits = result["hits"]["hits"]
-    total = result["hits"]["total"]["value"]
+    doc_total = result["hits"]["total"]["value"]
+    total = int(result.get("aggregations", {}).get("groups", {}).get("value", doc_total))
 
     return {
         "results": [{**h["_source"], "id": h["_id"]} for h in hits],
@@ -294,8 +332,9 @@ async def get_top_brands(
     if country:
         base_query = {"bool": {"must": [base_query], "filter": [{"term": {"countries": country}}]}}
 
-    # min_live_ads filters BUCKETS, not docs, so over-fetch then cut in Python.
-    bucket_size = limit * 4 if min_live_ads else limit
+    # Over-fetch buckets: min_live_ads filters buckets (not docs), and the
+    # true-scaling re-rank below can reorder past the raw-sum cut line.
+    bucket_size = limit * 4
     body = {
         "size": 0,
         "query": base_query,
@@ -304,13 +343,23 @@ async def get_top_brands(
                 "terms": {
                     "field": "advertiser_name.keyword",
                     "size": bucket_size,
-                    "order": {"total_variants": "desc"},
+                    # Raw sum only ORDERS the over-fetched candidates; the
+                    # honest figure is computed per-creative below.
+                    "order": {"raw_variants": "desc"},
                 },
                 "aggs": {
                     "advertiser_id": {"terms": {"field": "advertiser_id", "size": 1}},
                     "active": {"filter": {"term": {"is_active": True}}},
                     "countries": {"terms": {"field": "countries", "size": 10}},
-                    "total_variants": {"sum": {"field": "variant_count"}},
+                    "raw_variants": {"sum": {"field": "variant_count"}},
+                    # True scaling: one creative indexed in N markets (or N
+                    # collated copies in old data) must count its variant
+                    # group ONCE — max per creative_key, summed in Python.
+                    "per_creative": {
+                        "terms": {"field": "creative_key", "size": 250},
+                        "aggs": {"v": {"max": {"field": "variant_count"}}},
+                    },
+                    "creatives": {"cardinality": {"field": "creative_key"}},
                     "top_score": {"max": {"field": "performance_score"}},
                     "max_days": {"max": {"field": "days_running"}},
                     "live_ads": {"max": {"field": "brand_live_ads"}},
@@ -327,18 +376,22 @@ async def get_top_brands(
                 b["advertiser_id"]["buckets"][0]["key"]
                 if b["advertiser_id"]["buckets"] else None
             ),
-            "total_ads": b["doc_count"],
+            "total_ads": int(b["creatives"]["value"] or b["doc_count"]),
             "active_ads": b["active"]["doc_count"],
             "countries": [c["key"] for c in b["countries"]["buckets"]],
-            "total_variants": int(b["total_variants"]["value"] or 0),
+            "total_variants": int(sum(
+                c["v"]["value"] or 0 for c in b["per_creative"]["buckets"]
+            )),
             "top_score": round(b["top_score"]["value"] or 0, 1),
             "max_days": int(b["max_days"]["value"] or 0),
             "live_ads": int(b["live_ads"]["value"] or 0),
         }
         for b in buckets
     ]
+    brands.sort(key=lambda b: b["total_variants"], reverse=True)
     if min_live_ads:
-        brands = [b for b in brands if b["live_ads"] >= min_live_ads][:limit]
+        brands = [b for b in brands if b["live_ads"] >= min_live_ads]
+    brands = brands[:limit]
     return {"results": brands, "total": len(brands)}
 
 

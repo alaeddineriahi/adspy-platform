@@ -112,6 +112,14 @@ class Settings(BaseSettings):
     BRAND_HUNTER_MIN_GROWTH: int = 5           # +N live ads = a rising scaler
     BRAND_HUNTER_COOLDOWN_HOURS: int = 48      # don't re-hunt the same brand sooner
 
+    # Open-web research source for the hunter (optional). When a key is set, the
+    # hunter runs live trend queries and the LLM extracts brand names FROM THE
+    # FRESH RESULTS (grounded — never from model memory). Provider: serper |
+    # tavily | brave. Empty key = feature stays off (TikTok + rising scalers
+    # still run). See RESEARCH_API_SETUP.md for where to get a key.
+    SEARCH_API_PROVIDER: str = "serper"
+    SEARCH_API_KEY: str = ""
+
     # Best-performing thresholds
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3

@@ -15,6 +15,7 @@ from app.core.elasticsearch import (
     get_es_client,
     get_brand_ads as es_brand_ads,
     get_top_brands as es_top_brands,
+    get_discovered_brands as es_discovered_brands,
 )
 from app.models.watchlist import WatchedBrand
 from app.models.brand import BrandSnapshot
@@ -43,6 +44,27 @@ async def search_brands(
     es = get_es_client()
     try:
         res = await es_top_brands(es, q=q, country=country, min_live_ads=min_live_ads, limit=limit)
+    finally:
+        await es.close()
+    res["plan"] = plan
+    if free:
+        res["results"] = res["results"][:FREE_BRAND_CAP]
+        res["total"] = min(res.get("total", 0), FREE_BRAND_CAP)
+        res["free_capped"] = True
+    return res
+
+
+@router.get("/discovered")
+async def discovered_brands(uid: str = Depends(get_user_id)):
+    """The "Just Discovered" feed — freshly full-catalog'd winning brands.
+
+    Free sees a teaser (top FREE_BRAND_CAP); paid sees the full shelf.
+    """
+    plan = await get_plan(uid)
+    free = plan == "free"
+    es = get_es_client()
+    try:
+        res = await es_discovered_brands(es, limit=24)
     finally:
         await es.close()
     res["plan"] = plan

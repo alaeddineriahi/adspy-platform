@@ -158,14 +158,59 @@ async def _rising_scaler_leads(limit: int) -> list[BrandLead]:
     return [lead for _g, lead in scored[:limit]]
 
 
-async def _web_candidate_brands(limit: int) -> list[BrandLead]:
-    """Open-web trend research (e.g. "best-selling Shopify products this month").
+_WEB_EXTRACT_SYSTEM = """You are given raw web-search results about CURRENTLY trending
+e-commerce brands/products. Extract distinct consumer BRAND or STORE names that are
+ACTUALLY NAMED in the text. Rules:
+- Only names literally present in the results. Never add brands from your own knowledge.
+- Skip platforms/marketplaces/tools (TikTok, Shopify, Amazon, Temu, Meta, AliExpress).
+- Skip generic product categories ("posture corrector") — we want the brand selling it.
+Return STRICT JSON: {"brands": [{"name": "Brand", "note": "why it's trending, from the text"}]}
+Max 15. JSON only."""
 
-    Intentionally empty until a live search provider is wired: injecting brand
-    names from an LLM's training data would be exactly the stale data we must
-    avoid. When a provider key is added, return fresh BrandLeads here and the
-    rest of the pipeline (resolve → dive) already handles them."""
-    return []
+
+async def _web_candidate_brands(limit: int) -> list[BrandLead]:
+    """Open-web trend research → brand names, grounded on fresh results.
+
+    Off unless a search provider key is set (SEARCH_API_KEY). When on: runs a
+    few DATE-STAMPED trend queries (so results are current, not evergreen),
+    then the LLM extracts brand names ONLY from the fetched text — never from
+    its own training memory. That keeps discovery genuinely up-to-date."""
+    from app.ingestion.web_research import search_enabled, search_web
+
+    if not search_enabled():
+        return []
+
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    period = now.strftime("%B %Y")  # e.g. "July 2026"
+    queries = [
+        f"best selling dropshipping products {period}",
+        f"viral tiktok shop products {period}",
+        f"trending direct-to-consumer brands {period}",
+    ]
+    snippets: list[str] = []
+    for q in queries:
+        snippets.extend(await search_web(q))
+    snippets = [s for s in snippets if s][:40]
+    if not snippets:
+        return []
+
+    from app.ai.script_generator import _call_llm
+    import json
+
+    corpus = "\n".join(f"- {s}" for s in snippets)[:6000]
+    try:
+        raw = await _call_llm(_WEB_EXTRACT_SYSTEM, f"SEARCH RESULTS:\n{corpus}\n\nReturn the JSON.")
+        data = json.loads(raw)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("web-research extraction failed: %s", e)
+        return []
+    leads = []
+    for b in (data.get("brands") or []):
+        name = (b.get("name") or "").strip()
+        if _looks_like_brand(name):
+            leads.append(BrandLead(name=name, country="ALL", source="web_research"))
+    return leads[:limit]
 
 
 async def _recent_hunt_pages(cooldown_h: int) -> set[str]:

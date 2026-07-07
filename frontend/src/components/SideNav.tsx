@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Search, Bookmark, Zap, Eye, Settings, Megaphone, CreditCard, ScanSearch, Radar,
-  LucideIcon,
+  Sparkles, LucideIcon,
 } from "lucide-react";
 import { AdminNavLink } from "@/components/AdminNavLink";
 
@@ -19,6 +19,7 @@ const SECTIONS: {
     label: "Discover",
     items: [
       { href: "/radar", label: "Trend Radar", icon: Radar, grad: "from-[#ec4492] to-[#ee4454]", live: true },
+      { href: "/discovered", label: "Just Discovered", icon: Sparkles, grad: "from-[#f05427] to-[#ec4492]", live: true },
       { href: "/search", label: "Search", icon: Search, grad: "from-[#3e86c6] to-[#a666aa]" },
       { href: "/brands", label: "Brand Spy", icon: Eye, grad: "from-[#a666aa] to-[#ec4492]" },
     ],

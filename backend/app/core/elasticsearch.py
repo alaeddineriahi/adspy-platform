@@ -477,6 +477,55 @@ async def find_similar_product_ads(
     }
 
 
+async def get_discovered_brands(es: AsyncElasticsearch, limit: int = 24) -> dict:
+    """Freshly full-catalog'd winning brands — the "Just Discovered" feed.
+
+    Surfaces brands whose entire catalog we pulled recently, whether the Brand
+    Hunter found them (viral on TikTok / rising scalers) or the sweep's
+    deep-dive did (top scalers). Ordered by most-recently pulled, so it reads
+    as a live shelf of fresh winners. The per-brand `source` is returned as a
+    friendly category the UI badges — it's a label, not the internal provenance
+    of any single ad.
+    """
+    body = {
+        "size": 0,
+        "query": {"terms": {"source.keyword": [
+            "brand_deepdive", "hunter_tiktok_viral", "hunter_rising_scaler",
+        ]}},
+        "aggs": {"brands": {
+            "terms": {"field": "advertiser_name.keyword", "size": limit,
+                      "order": {"recent": "desc"}},
+            "aggs": {
+                "recent": {"max": {"field": "indexed_at"}},
+                "advertiser_id": {"terms": {"field": "advertiser_id", "size": 1}},
+                "live_ads": {"max": {"field": "brand_live_ads"}},
+                "src": {"terms": {"field": "source.keyword", "size": 1,
+                                  "order": {"_count": "desc"}}},
+                "countries": {"terms": {"field": "countries", "size": 6}},
+                "variants": {"sum": {"field": "variant_count"}},
+                "top": {"top_hits": {"size": 1, "_source": ["thumbnail", "copy_text"]}},
+            },
+        }},
+    }
+    result = await es.search(index="ads", body=body)
+    out = []
+    for b in result.get("aggregations", {}).get("brands", {}).get("buckets", []):
+        top_src = b["top"]["hits"]["hits"]
+        src_buckets = b["src"]["buckets"]
+        out.append({
+            "advertiser_name": b["key"],
+            "advertiser_id": (b["advertiser_id"]["buckets"][0]["key"]
+                              if b["advertiser_id"]["buckets"] else None),
+            "source": src_buckets[0]["key"] if src_buckets else "brand_deepdive",
+            "discovered_at": b["recent"]["value_as_string"],
+            "live_ads": int(b["live_ads"]["value"] or 0),
+            "total_variants": int(b["variants"]["value"] or 0),
+            "countries": [c["key"] for c in b["countries"]["buckets"]],
+            "thumbnail": (top_src[0]["_source"].get("thumbnail") if top_src else None),
+        })
+    return {"results": out, "total": len(out)}
+
+
 async def get_trending_ads(
     es: AsyncElasticsearch,
     country: str = None,

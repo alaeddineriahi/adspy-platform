@@ -46,6 +46,25 @@ _APP_RE = re.compile(
     r"(free app|download the app|تطبيق مجاني|do not read in public|attention!)",
     re.IGNORECASE,
 )
+# Local services & lead-gen that slip the commerce filter (they carry prices /
+# "Book" CTAs) but aren't dropshippable products: real estate, law/finance,
+# dealerships, dental clinics, webinars, support communities.
+#
+# CRITICAL precision rule: only ESTABLISHMENT-NAMING phrases products never use.
+# Health-adjacent words are intentionally EXCLUDED — a real product ad says
+# "cheaper than a chiropractor", "whiter teeth without the dentist", "results
+# without cosmetic surgery", so matching dentist/chiropractor/surgery/
+# consultation would drop genuine winners (it flagged Celinva, a sciatica
+# cushion, in testing). Recall on a stray dental clinic matters far less than
+# never nuking a product.
+_SERVICE_RE = re.compile(
+    r"\breal estate\b|\brealtor\b|homes? for sale|new homes?\b|\bmortgage\b|"
+    r"dental clinic|\blaw firm\b|\battorney\b|car dealership|auto dealership|"
+    r"health insurance|life insurance|car insurance|"
+    r"\bwebinar\b|\benroll now\b|recovery community|"
+    r"عيادة أسنان|عقارات للبيع|شقق للبيع",
+    re.IGNORECASE,
+)
 
 # Global marketplaces / mega-advertisers — technically "winners" but useless as
 # product/creative inspiration for a local dropshipper. Filtered out so the
@@ -126,7 +145,7 @@ def _scale_signal(variants: int, cap: int = 25) -> float:
     return min(math.log1p(max(variants, 0)) / math.log1p(cap), 1.0)
 
 
-def _classify_ecommerce(text: str, link_url: str = "", cta: str = "") -> tuple[bool, int, bool, str]:
+def _classify_ecommerce(text: str, link_url: str = "", cta: str = "", name: str = "") -> tuple[bool, int, bool, str]:
     """Return (is_ecommerce, ecom_signal_count, strong_commerce, spam_reason).
 
     Scans the creative text (Arabic as substrings), the CTA button, and the
@@ -149,6 +168,14 @@ def _classify_ecommerce(text: str, link_url: str = "", cta: str = "") -> tuple[b
     has_shop_url = bool(link_url and _SHOP_URL_RE.search(link_url))
     if has_shop_url:
         signals += 1
+
+    # Services / lead-gen fire REGARDLESS of commerce signals: a dental clinic
+    # or real-estate ad legitimately carries a price + "Book" CTA (that's why it
+    # leaks through the longevity branch), but it's still not a dropshippable
+    # product. The phrases are specific enough that the signals<2 escape the
+    # other spam categories use would be a bug here, not a safeguard.
+    if _SERVICE_RE.search(text) or (name and _SERVICE_RE.search(name)):
+        return False, signals, False, "service"
 
     # Strong-spam categories: drop unless the ad ALSO shows real commerce intent.
     for label, rx in (("game", _GAME_RE), ("ebook", _EBOOK_RE), ("drama", _DRAMA_RE), ("app", _APP_RE)):
@@ -215,7 +242,9 @@ def score_ad(ad: RawAd, now_ts: Optional[int] = None) -> AdScore:
 
     days = _days_running(ad.start_ts, ad.end_ts, now_ts)
     variants = max(1, ad.variant_count)
-    is_ecom, ecom_signals, strong_commerce, spam_reason = _classify_ecommerce(text, ad.link_url, ad.cta_text)
+    is_ecom, ecom_signals, strong_commerce, spam_reason = _classify_ecommerce(
+        text, ad.link_url, ad.cta_text, ad.page_name
+    )
     if not spam_reason and _is_global_marketplace(ad.page_name):
         spam_reason = "marketplace"  # global mega-brand, not inspirable
 

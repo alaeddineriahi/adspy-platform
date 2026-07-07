@@ -73,38 +73,97 @@ def cap_for(country: str, core_cap: int) -> int:
 # structurally excludes games/apps, and the winner-scoring (longevity + scaling
 # + e-commerce, global marketplaces filtered) surfaces the winners.
 # Want the raw firehose? Pass "" as a search term in the UI. Want a niche? Type it.
-DEFAULT_SEARCH_TERMS = [
-    "cosmétique", "sérum", "crème", "parfum",   # beauty / skincare
-    "montre", "lunettes", "chaussures", "sac",  # accessories / fashion
-    "complément", "minceur", "cheveux",         # health / hair
-    "cuisine", "gadget", "bébé",                # home / gadgets / kids
-    "سيروم", "عطر", "كريم", "عناية",            # AR: serum / perfume / cream / care
+# The vocabulary spans the 15 highest-margin / most-scalable e-com niches
+# (health & supplements, beauty, personal care, fashion, pets, home & kitchen,
+# fitness, electronics/gadgets, baby, jewelry, sleep, automotive, food & bev,
+# mental wellness, gaming). A beauty-heavy list is why discovery came back all
+# fragrance/skincare; covering every niche is what makes it wide.
+#
+# It's big on purpose, so a single sweep does NOT query all of it (that would
+# hammer the FB session). `default_terms_for` returns a ROTATING slice — each
+# sweep covers a different window, so the whole vocabulary cycles through over
+# a day or two while per-run query volume stays bounded.
+EN_NICHE_TERMS = [
+    "supplement", "collagen", "probiotic", "greens powder",          # health & supplements
+    "serum", "skincare", "retinol", "perfume",                       # beauty & skincare
+    "teeth whitening", "hair growth", "electric toothbrush",         # personal care
+    "sneakers", "leggings", "shapewear", "sunglasses", "watch",      # fashion & apparel
+    "dog", "pet", "cat",                                             # pets
+    "kitchen gadget", "home organizer", "cleaning",                  # home & kitchen
+    "resistance bands", "massage gun", "fitness",                    # fitness & sports
+    "earbuds", "phone accessory", "led lights",                      # electronics & gadgets
+    "baby", "toddler",                                              # baby & kids
+    "jewelry", "necklace", "bracelet",                              # jewelry & accessories
+    "pillow", "sleep",                                             # sleep products
+    "car accessory",                                              # automotive
+    "coffee", "snack",                                            # food & beverage
+    "anxiety relief", "stress relief",                             # mental wellness
+    "gaming headset", "controller",                               # gaming accessories
 ]
-# English category terms for the EN trend markets (US/CA/GB/AU).
-EN_SEARCH_TERMS = [
-    "serum", "skincare", "perfume", "cream",
-    "watch", "sunglasses", "sneakers", "bag",
-    "supplement", "hair growth", "posture",
-    "kitchen gadget", "cleaning", "baby",
+FR_NICHE_TERMS = [
+    "complément alimentaire", "collagène", "probiotique",            # santé & compléments
+    "sérum", "cosmétique", "crème", "parfum",                        # beauté
+    "blanchiment dents", "cheveux", "brosse à dents électrique",     # soin personnel
+    "chaussures", "legging", "gaine amincissante", "lunettes", "montre",  # mode
+    "chien", "chat", "animaux",                                     # animaux
+    "cuisine", "rangement", "nettoyage",                            # maison
+    "fitness", "musculation", "yoga",                              # sport
+    "écouteurs", "gadget", "led",                                  # électronique
+    "bébé", "enfant",                                             # bébé & enfants
+    "bijoux", "collier", "bracelet",                               # bijoux
+    "oreiller", "sommeil",                                        # sommeil
+    "accessoire voiture",                                        # auto
+    "café", "minceur",                                           # alimentation / santé
+    "anti-stress",                                              # bien-être mental
+    "manette gaming",                                           # gaming
 ]
-# French-only terms for France (the AR half is noise there).
-FR_SEARCH_TERMS = [
-    "cosmétique", "sérum", "crème", "parfum",
-    "montre", "lunettes", "chaussures", "sac",
-    "complément", "minceur", "cheveux",
-    "cuisine", "gadget", "bébé",
+AR_NICHE_TERMS = [
+    "مكملات غذائية", "كولاجين",                # supplements
+    "سيروم", "عطر", "كريم", "عناية بالبشرة",   # beauty
+    "تبييض الاسنان", "الشعر",                  # personal care
+    "حذاء", "نظارات", "ساعة", "حزام تنحيف",     # fashion
+    "كلاب", "قطط", "حيوانات اليفة",            # pets
+    "مطبخ", "تنظيف", "تنظيم المنزل",           # home & kitchen
+    "لياقة", "رياضة",                          # fitness
+    "سماعات", "اضاءة",                         # electronics
+    "اطفال", "بيبي",                           # baby
+    "مجوهرات", "قلادة", "اسورة",                # jewelry
+    "وسادة", "نوم",                            # sleep
+    "اكسسوارات السيارة",                       # automotive
+    "قهوة", "تخسيس",                           # food / health
+    "العاب",                                   # gaming
 ]
+# MENA core markets are FR+AR — sweep both vocabularies there.
+DEFAULT_SEARCH_TERMS = FR_NICHE_TERMS + AR_NICHE_TERMS
 
 _EN_MARKETS = {"US", "CA", "GB", "AU"}
 
 
+def _rotating_slice(terms: list[str], n: int) -> list[str]:
+    """A window of `n` terms that advances every sweep, cycling the full vocab.
+
+    Keeps per-sweep FB query volume bounded while covering every niche across
+    consecutive runs (window keyed to the sweep interval)."""
+    if n <= 0 or len(terms) <= n:
+        return terms
+    interval_h = float(getattr(settings, "INGEST_INTERVAL_HOURS", 12)) or 12
+    window = int(datetime.now(timezone.utc).timestamp() // (interval_h * 3600))
+    off = (window * n) % len(terms)
+    return (terms + terms)[off:off + n]
+
+
 def default_terms_for(country: str) -> list[str]:
-    """Per-market category terms — English for EN markets, no Arabic in France."""
+    """Per-market niche terms — English for EN markets, no Arabic in France —
+    returned as a rotating slice so the full niche vocabulary cycles over time."""
+    n = int(getattr(settings, "INGEST_TERMS_PER_SWEEP", 18))
     if country in _EN_MARKETS:
-        return EN_SEARCH_TERMS
+        return _rotating_slice(EN_NICHE_TERMS, n)
     if country == "FR":
-        return FR_SEARCH_TERMS
-    return _as_list(getattr(settings, "INGEST_SEARCH_TERMS", None), DEFAULT_SEARCH_TERMS)
+        return _rotating_slice(FR_NICHE_TERMS, n)
+    env = _as_list(getattr(settings, "INGEST_SEARCH_TERMS", None), [])
+    if env:
+        return env  # explicit env override — use verbatim, no rotation
+    return _rotating_slice(DEFAULT_SEARCH_TERMS, n)
 
 _ARABIC_RE = re.compile(r"[؀-ۿ]")
 _FRENCH_RE = re.compile(

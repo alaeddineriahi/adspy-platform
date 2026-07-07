@@ -119,8 +119,8 @@ export default function DiscoveredPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
                       {b.live_ads > 0 && (
-                        <span className="flex items-center gap-1 font-semibold text-rose-600" title="Verified ads live in the Ad Library right now">
-                          <Radio className="w-3.5 h-3.5" /> {b.live_ads} live now
+                        <span className="flex items-center gap-1 font-semibold text-rose-600" title="Ads this brand has live in the Ad Library right now (90+ = we pulled our per-brand max)">
+                          <Radio className="w-3.5 h-3.5" /> {b.live_ads >= 90 ? "90+" : b.live_ads} live now
                         </span>
                       )}
                       {b.total_variants > 0 && (

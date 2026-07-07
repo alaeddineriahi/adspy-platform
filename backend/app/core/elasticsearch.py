@@ -502,7 +502,13 @@ async def get_discovered_brands(es: AsyncElasticsearch, limit: int = 24) -> dict
                 "src": {"terms": {"field": "source.keyword", "size": 1,
                                   "order": {"_count": "desc"}}},
                 "countries": {"terms": {"field": "countries", "size": 6}},
-                "variants": {"sum": {"field": "variant_count"}},
+                # True scaling: one creative running in N ad-sets counts its
+                # variant group ONCE (max per creative_key, summed) — a raw sum
+                # over collated duplicate docs is what produced "2700× scaling".
+                "per_creative": {
+                    "terms": {"field": "creative_key", "size": 250},
+                    "aggs": {"v": {"max": {"field": "variant_count"}}},
+                },
                 "top": {"top_hits": {"size": 1, "_source": ["thumbnail", "copy_text"]}},
             },
         }},
@@ -512,6 +518,7 @@ async def get_discovered_brands(es: AsyncElasticsearch, limit: int = 24) -> dict
     for b in result.get("aggregations", {}).get("brands", {}).get("buckets", []):
         top_src = b["top"]["hits"]["hits"]
         src_buckets = b["src"]["buckets"]
+        true_scaling = int(sum(c["v"]["value"] or 0 for c in b["per_creative"]["buckets"]))
         out.append({
             "advertiser_name": b["key"],
             "advertiser_id": (b["advertiser_id"]["buckets"][0]["key"]
@@ -519,7 +526,7 @@ async def get_discovered_brands(es: AsyncElasticsearch, limit: int = 24) -> dict
             "source": src_buckets[0]["key"] if src_buckets else "brand_deepdive",
             "discovered_at": b["recent"]["value_as_string"],
             "live_ads": int(b["live_ads"]["value"] or 0),
-            "total_variants": int(b["variants"]["value"] or 0),
+            "total_variants": true_scaling,
             "countries": [c["key"] for c in b["countries"]["buckets"]],
             "thumbnail": (top_src[0]["_source"].get("thumbnail") if top_src else None),
         })

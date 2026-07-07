@@ -121,6 +121,11 @@ class Settings(BaseSettings):
     SEARCH_API_KEY: str = ""
 
     # Best-performing thresholds
+    # Niche vocabulary is broad (all 15 profitable niches); each sweep queries
+    # a rotating slice of this many terms per market, so coverage widens over
+    # runs without hammering the FB session in any single sweep.
+    INGEST_TERMS_PER_SWEEP: int = 18
+
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3
     # Depth per market. Raised 40→90 (2026-07-06): dedupe now keeps only distinct

@@ -160,7 +160,7 @@ export default function BrandDetailPage() {
                   className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-bold text-white bg-gradient-to-r from-rose-500 to-orange-500"
                   title="Verified: total ads this brand has live in the Ad Library right now"
                 >
-                  <Radio className="w-3.5 h-3.5" /> {liveNow} ads live now
+                  <Radio className="w-3.5 h-3.5" /> {liveNow >= 90 ? "90+" : liveNow} ads live now
                 </span>
               )}
               <span className="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded-lg">

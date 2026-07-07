@@ -125,9 +125,9 @@ export default function BrandsPage() {
                 {(b.live_ads ?? 0) > 0 && (
                   <span
                     className="text-xs px-2 py-1 rounded font-bold text-white bg-gradient-to-r from-rose-500 to-orange-500"
-                    title="Verified: total ads this brand has live in the Ad Library right now"
+                    title="Ads this brand has live in the Ad Library right now (90+ = our per-brand fetch max)"
                   >
-                    {b.live_ads} live now
+                    {(b.live_ads ?? 0) >= 90 ? "90+" : b.live_ads} live now
                   </span>
                 )}
                 <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">

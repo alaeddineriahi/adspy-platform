@@ -323,6 +323,104 @@ async def _merge_existing(es, docs: list[dict]) -> dict[str, dict]:
     return existing
 
 
+async def dive_and_index_brand(
+    es,
+    page_id: str,
+    page_name: str,
+    country: str,
+    sem: asyncio.Semaphore,
+    radar_events: Optional[list[dict]] = None,
+    source: str = "brand_deepdive",
+    max_keep: Optional[int] = None,
+) -> tuple[int, int]:
+    """Pull ONE brand's full live Ad Library catalog and index its winners.
+
+    The shared per-brand engine behind both the sweep's deep-dive (brands it
+    surfaced) and the Brand Hunter (brands discovered from live viral signals).
+    Returns (catalog_indexed, live_ad_count). Records a BrandSnapshot and, when
+    `radar_events` is passed, escalation/expansion signals. `country` is the
+    market catalog ads get attributed to (the ALL-countries fetch tags "ALL").
+    """
+    max_keep = max_keep or int(getattr(settings, "INGEST_DEEPDIVE_MAX_KEEP", 30))
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+
+    ads, live = await fetch_page_ads(page_id, country=country)
+    if not ads and not live:
+        return 0, 0
+
+    # Snapshot the observation (trajectory history). The previous snapshot,
+    # read before inserting, feeds the radar's brand-escalation signal.
+    prev_live = 0
+    try:
+        async with async_session() as db:
+            prev_live = await db.scalar(
+                select(BrandSnapshot.live_ads)
+                .where(BrandSnapshot.page_id == page_id)
+                .order_by(BrandSnapshot.captured_at.desc())
+                .limit(1)
+            ) or 0
+            db.add(BrandSnapshot(
+                page_id=page_id, page_name=page_name, country="ALL", live_ads=live,
+            ))
+            await db.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("brand snapshot insert failed for %s: %s", page_name, e)
+    if radar_events is not None:
+        esc = brand_escalation_event(page_id, page_name, prev_live, live)
+        if esc:
+            radar_events.append(esc)
+
+    # The brand's catalog ads join the index through the SAME winner filter
+    # as sweep ads. Attribute ALL-countries ads to the market we care about.
+    for ad in ads:
+        if ad.country == "ALL":
+            ad.country = country
+    uniq = list({ad.ad_id: ad for ad in ads}.values())
+    _assign_variant_counts(uniq)
+    kept = [(ad, s) for ad in uniq if (s := score_ad(ad, now_ts)).keep]
+    # Distinct creatives only — page catalogs are collation-heavy; the budget
+    # must buy N different ads, not N copies of one.
+    kept = _dedupe_creatives(kept)
+    kept.sort(key=lambda t: t[1].score, reverse=True)
+    kept = kept[:max_keep]
+
+    docs = await asyncio.gather(*[_build_doc(ad, s, sem) for ad, s in kept])
+    for d in docs:
+        d["brand_live_ads"] = live
+        d["source"] = source
+    dive_prior = await _merge_existing(es, docs)
+    for d in docs:
+        await es.index(index="ads", id=d["ad_id"], document=d)
+
+    # Radar: a RE-observed brand shipping a batch of fresh winners is a signal
+    # (first observation excluded — everything is "new" then).
+    if radar_events is not None and prev_live > 0:
+        fresh = sum(1 for d in docs if d["ad_id"] not in dive_prior)
+        exp = brand_expansion_event(page_id, page_name, country, fresh)
+        if exp:
+            radar_events.append(exp)
+
+    # Stamp the live-ad count on the brand's PREVIOUSLY indexed ads too, so
+    # Brand Spy's "N ads live" covers the whole footprint.
+    try:
+        await es.update_by_query(
+            index="ads",
+            body={
+                "query": {"bool": {"filter": [{"term": {"advertiser_id": page_id}}]}},
+                "script": {"source": "ctx._source.brand_live_ads = params.n",
+                           "params": {"n": live}},
+                "conflicts": "proceed",
+            },
+            refresh=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("brand_live_ads stamp failed for %s: %s", page_name, e)
+
+    logger.info("Dived %s (%s) [%s]: %s ads live, %s catalog winners indexed.",
+                page_name, page_id, source, live, len(docs))
+    return len(docs), live
+
+
 async def _deep_dive_pass(
     es,
     final: list[tuple[RawAd, object]],
@@ -376,88 +474,15 @@ async def _deep_dive_pass(
         reverse=True,
     )[:per_sweep]
 
-    now_ts = int(datetime.now(timezone.utc).timestamp())
     sem = asyncio.Semaphore(8)
     for seed_ad, _seed_score in candidates:
-        ads, live = await fetch_page_ads(seed_ad.page_id, country=seed_ad.country)
-        if not ads and not live:
-            continue
-        stats["brands"] += 1
-
-        # Snapshot the observation (trajectory history). Best-effort. The
-        # previous snapshot (fetched before inserting) feeds the radar's
-        # brand-escalation signal.
-        prev_live = 0
-        try:
-            async with async_session() as db:
-                prev_live = await db.scalar(
-                    select(BrandSnapshot.live_ads)
-                    .where(BrandSnapshot.page_id == seed_ad.page_id)
-                    .order_by(BrandSnapshot.captured_at.desc())
-                    .limit(1)
-                ) or 0
-                db.add(BrandSnapshot(
-                    page_id=seed_ad.page_id, page_name=seed_ad.page_name,
-                    country="ALL", live_ads=live,
-                ))
-                await db.commit()
-        except Exception as e:  # noqa: BLE001
-            logger.warning("brand snapshot insert failed for %s: %s", seed_ad.page_name, e)
-        if radar_events is not None:
-            esc = brand_escalation_event(seed_ad.page_id, seed_ad.page_name, prev_live, live)
-            if esc:
-                radar_events.append(esc)
-
-        # The brand's catalog ads join the index through the SAME winner filter
-        # as sweep ads. The ALL-countries fetch tags ads "ALL"; attribute them
-        # to the market the brand won in — that's where they're inspirable.
-        for ad in ads:
-            if ad.country == "ALL":
-                ad.country = seed_ad.country
-        uniq = list({ad.ad_id: ad for ad in ads}.values())
-        _assign_variant_counts(uniq)
-        kept = [(ad, s) for ad in uniq if (s := score_ad(ad, now_ts)).keep]
-        # Distinct creatives only: page catalogs are collation-heavy, and the
-        # max_keep budget must buy 30 different ads, not 30 copies of one.
-        kept = _dedupe_creatives(kept)
-        kept.sort(key=lambda t: t[1].score, reverse=True)
-        kept = kept[:max_keep]
-
-        docs = await asyncio.gather(*[_build_doc(ad, s, sem) for ad, s in kept])
-        for d in docs:
-            d["brand_live_ads"] = live
-            d["source"] = "brand_deepdive"
-        dive_prior = await _merge_existing(es, docs)
-        for d in docs:
-            await es.index(index="ads", id=d["ad_id"], document=d)
-        stats["catalog_indexed"] += len(docs)
-
-        # Radar: a RE-dived brand shipping a batch of fresh winners is a signal
-        # (first dives are excluded — everything is "new" then).
-        if radar_events is not None and prev_live > 0:
-            fresh = sum(1 for d in docs if d["ad_id"] not in dive_prior)
-            exp = brand_expansion_event(seed_ad.page_id, seed_ad.page_name, seed_ad.country, fresh)
-            if exp:
-                radar_events.append(exp)
-
-        # Stamp the live-ad count on the brand's PREVIOUSLY indexed ads too, so
-        # Brand Spy's "N ads live" covers the whole footprint.
-        try:
-            await es.update_by_query(
-                index="ads",
-                body={
-                    "query": {"bool": {"filter": [{"term": {"advertiser_id": seed_ad.page_id}}]},},
-                    "script": {"source": "ctx._source.brand_live_ads = params.n",
-                               "params": {"n": live}},
-                    "conflicts": "proceed",
-                },
-                refresh=True,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning("brand_live_ads stamp failed for %s: %s", seed_ad.page_name, e)
-
-        logger.info("Deep-dive %s (%s): %s ads live, %s catalog winners indexed.",
-                    seed_ad.page_name, seed_ad.page_id, live, len(docs))
+        indexed, _live = await dive_and_index_brand(
+            es, seed_ad.page_id, seed_ad.page_name, seed_ad.country, sem,
+            radar_events=radar_events, source="brand_deepdive", max_keep=max_keep,
+        )
+        if indexed or _live:
+            stats["brands"] += 1
+            stats["catalog_indexed"] += indexed
         await asyncio.sleep(random.uniform(2.0, 4.0))  # gentle on the FB session
 
     if stats["catalog_indexed"]:

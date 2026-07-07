@@ -492,6 +492,60 @@ async def fetch_page_ads(
     return ads, live
 
 
+async def resolve_page_id(
+    name: str,
+    country: str = "ALL",
+    limit: int = 40,
+) -> Optional[tuple[str, str]]:
+    """Resolve an advertiser NAME to its Facebook page (page_id, page_name).
+
+    The discovery unlock: a viral-brand name from ANY source (TikTok Creative
+    Center, web research, a manual seed) is useless to the deep-dive without a
+    page_id. So we keyword-search the Ad Library for the name and pick the page
+    that (a) best matches the name and (b) runs the most ads under it — a real
+    advertiser, not a one-off mention. Returns None when nothing plausibly
+    matches (the brand may not run Meta ads, or the session is dead).
+    """
+    name = (name or "").strip()
+    if len(name) < 2:
+        return None
+    ads = await fetch_ads(country=country, search_term=name, limit=limit, max_pages=1)
+    if not ads:
+        return None
+
+    import difflib
+
+    def norm(s: str) -> str:
+        return re.sub(r"[^0-9a-z؀-ۿ]+", "", (s or "").lower())
+
+    target = norm(name)
+    # Group by page: how many ads, and the best name-similarity we saw.
+    pages: dict[str, dict] = {}
+    for ad in ads:
+        if not ad.page_id:
+            continue
+        p = pages.setdefault(ad.page_id, {"name": ad.page_name, "count": 0, "sim": 0.0})
+        p["count"] += 1
+        pn = norm(ad.page_name)
+        sim = 1.0 if (target and (target in pn or pn in target)) else \
+            difflib.SequenceMatcher(None, target, pn).ratio()
+        if sim > p["sim"]:
+            p["sim"] = sim
+            p["name"] = ad.page_name
+    if not pages:
+        return None
+
+    # Require a real name match (guards against keyword-in-copy false hits),
+    # then prefer the strongest match, breaking ties by ad volume.
+    best_id = max(pages, key=lambda pid: (pages[pid]["sim"], pages[pid]["count"]))
+    best = pages[best_id]
+    if best["sim"] < 0.6:
+        logger.info("resolve_page_id('%s'): best match '%s' sim=%.2f — rejected.",
+                    name, best["name"], best["sim"])
+        return None
+    return best_id, best["name"]
+
+
 async def fetch_live_count(country: str, search_term: str) -> Optional[int]:
     """Meta's own "~N results" total for a keyword search in one market —
     the truth behind any "nobody runs this there" claim (dossier gap map).

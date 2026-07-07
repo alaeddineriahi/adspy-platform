@@ -102,6 +102,16 @@ class Settings(BaseSettings):
     TIKTOK_PERIOD_DAYS: int = 30
     TIKTOK_INTERVAL_HOURS: float = 24   # a browser launch per run — daily is plenty
 
+    # Brand Hunter: discover winning/viral brands from live signals (TikTok
+    # top-ad brands + rising scalers) and pull their full Meta catalog. Needs
+    # the FB session (resolve + dive), so it's budgeted like the deep-dive.
+    BRAND_HUNTER_ENABLED: bool = True
+    BRAND_HUNTER_PER_RUN: int = 6              # brands dived per run
+    BRAND_HUNTER_INTERVAL_HOURS: float = 24
+    BRAND_HUNTER_TIKTOK_LOOKBACK_DAYS: int = 7  # only brands viral in this window
+    BRAND_HUNTER_MIN_GROWTH: int = 5           # +N live ads = a rising scaler
+    BRAND_HUNTER_COOLDOWN_HOURS: int = 48      # don't re-hunt the same brand sooner
+
     # Best-performing thresholds
     INGEST_MIN_DAYS_RUNNING: int = 7
     INGEST_MIN_VARIANTS: int = 3

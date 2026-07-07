@@ -25,6 +25,7 @@ from app.ingestion.pipeline import (
 from app.ingestion.session import session_available, describe_source, set_manual_cookie
 from app.ingestion.scraper import import_search_template, has_search_template
 from app.ingestion.tiktok import TT_LAST_RUN, ingest_tiktok_top_ads, tiktok_countries
+from app.ingestion.brand_hunter import HUNT_LAST_RUN, hunt_brands
 
 logger = logging.getLogger("adspy.ingest.api")
 # Every route needs the FB session cookie or triggers real scraping — gate
@@ -121,6 +122,20 @@ async def run_tiktok(req: TikTokRunRequest, background: BackgroundTasks):
     }
 
 
+class HunterRunRequest(BaseModel):
+    per_run: Optional[int] = None
+
+
+@router.post("/brand-hunter/run")
+async def run_brand_hunter(req: HunterRunRequest, background: BackgroundTasks):
+    """Trigger a Brand Hunter pass: discover viral/winning brands from live
+    signals (TikTok + rising scalers) and pull their full Meta catalog."""
+    if HUNT_LAST_RUN.get("status") == "running":
+        return {"started": False, "note": "A brand hunt is already running."}
+    background.add_task(hunt_brands, per_run=req.per_run)
+    return {"started": True, "note": "Brand hunt running in background; poll GET /api/ingestion/status."}
+
+
 @router.get("/status")
 async def ingestion_status():
     return {
@@ -132,6 +147,10 @@ async def ingestion_status():
             "enabled": bool(getattr(settings, "TIKTOK_ENABLED", True)),
             "countries": tiktok_countries(),
             "last_run": TT_LAST_RUN,
+        },
+        "brand_hunter": {
+            "enabled": bool(getattr(settings, "BRAND_HUNTER_ENABLED", True)),
+            "last_run": HUNT_LAST_RUN,
         },
     }
 

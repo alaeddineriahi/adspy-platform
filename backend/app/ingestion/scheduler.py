@@ -16,6 +16,7 @@ import logging
 from app.core.config import settings
 from app.ingestion.pipeline import ingest_best_performing, sweep_countries
 from app.ingestion.tiktok import ingest_tiktok_top_ads, tiktok_countries
+from app.ingestion.brand_hunter import hunt_brands
 
 logger = logging.getLogger("adspy.scheduler")
 
@@ -34,6 +35,13 @@ async def _run_tiktok_job():
         await ingest_tiktok_top_ads()
     except Exception as e:  # noqa: BLE001
         logger.exception("Scheduled TikTok ingestion failed: %s", e)
+
+
+async def _run_hunter_job():
+    try:
+        await hunt_brands()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Scheduled brand hunt failed: %s", e)
 
 
 def start_scheduler() -> None:
@@ -64,6 +72,19 @@ def start_scheduler() -> None:
             _run_tiktok_job,
             trigger=IntervalTrigger(hours=tt_hours),
             id="ingest_tiktok_top_ads",
+            next_run_time=None,
+            max_instances=1,
+            coalesce=True,
+        )
+
+    if bool(getattr(settings, "BRAND_HUNTER_ENABLED", True)):
+        # Runs AFTER TikTok has landed fresh viral brands to resolve. Offset by
+        # ~30 min so the two browser/session-heavy jobs don't overlap on boot.
+        hunt_hours = float(getattr(settings, "BRAND_HUNTER_INTERVAL_HOURS", 24))
+        _scheduler.add_job(
+            _run_hunter_job,
+            trigger=IntervalTrigger(hours=hunt_hours),
+            id="brand_hunter",
             next_run_time=None,
             max_instances=1,
             coalesce=True,
